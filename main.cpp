@@ -28,10 +28,6 @@ int main(void)
 	{
 		set_u32( 0xd000001c, (1 << 25));      // XOR GPIO
 		sleep(500'000);
-		set_u32( 0xd000001c, (0 << 25));
-		sleep(250'000);
-		set_u32( 0xd000001c, (1 << 25));      // XOR GPIO
-		sleep(500'000);
 	}
 
 	return 0;
