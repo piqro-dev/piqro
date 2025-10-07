@@ -1,4 +1,17 @@
--nostdlib 
---target=arm-none-eabi 
--mcpu=cortex-m0+ 
+-Isdk
+
+-D RP2040=1
+-D FLASHSIZE=0x200000
+-D RAMSIZE=0x40000
+
+-fno-builtin
+--target=arm-none-eabi
+-march=armv6-m
+-mcpu=cortex-m0+
 -mthumb
+-fno-exceptions
+-fno-unwind-tables
+-fno-rtti
+-ferror-limit=9999
+
+--sysroot=C:\Program Files (x86)\Arm GNU Toolchain arm-none-eabi\14.3 rel1\arm-none-eabi
