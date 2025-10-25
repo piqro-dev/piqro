@@ -1,15 +1,20 @@
-cmake_minimum_required(VERSION 4.0)
-
-project(piqro C CXX ASM)
+cmake_minimum_required(VERSION 3.17)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 23)
 
+# pico SDK comes with a "download from git" option
+
 include(FetchContent)
 
-set(PICO_SDK_PATH pico_sdk)
-set(PICOVGA_PATH picovga)
+set(PICO_SDK_PATH pico-sdk)
+set(PICOVGA_PATH ${CMAKE_CURRENT_LIST_DIR}/bin/picovga-cmake)
+
+include(third_party/pico_sdk_import.cmake)
+include(third_party/picovga_import.cmake)
+
+project(piqro C CXX ASM)
 
 pico_sdk_init()
 
