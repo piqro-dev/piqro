@@ -1,6 +1,0 @@
-[submodule "third_party/pico-sdk"]
-	path = third_party/pico-sdk
-	url = https://github.com/raspberrypi/pico-sdk
-[submodule "third_party/picovga-cmake"]
-	path = third_party/picovga-cmake
-	url = https://github.com/codaris/picovga-cmake
