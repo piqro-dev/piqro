@@ -1,34 +1,38 @@
 @echo off
+setlocal EnableDelayedExpansion
 
-if [%1]==[install] (
-	if not exist bin mkdir bin
+where /q clang.exe
 
-	pushd bin
-		
-	if not exist pico-sdk      git clone https://github.com/raspberrypi/pico-sdk --depth=1 --recursive 
-	if not exist picovga-cmake git clone https://github.com/codaris/picovga-cmake --depth=1 --recursive
-		
-	cmake .. -G Ninja && ninja
-
-	move compile_commands.json ../compile_commands.json
-
-	popd
-) 
-
-if [%1]==[piqro] (
-	pushd bin
-
-	ninja
-	move compile_commands.json ../compile_commands.json
-	
-	popd
+if %errorlevel%==1 (
+	echo Clang wasn't found. Install it, then ensure it is available in your PATH and try again.
+	exit /b 1
 )
 
-if [%1]==[] (
-	echo usage: build.cmd ^<target^>
-	echo.
-	echo targets: 
-	echo.
-	echo - install
-	echo - piqro
+for %%a in (%*) do set "%%a=true"
+
+set common_flags=-std=gnu++2c ^
+	-Isrc ^
+	-fenable-matrix ^
+	-ffast-math ^
+	-fuse-ld=lld ^
+	-Wno-c99-designator ^
+	-Wno-undefined-internal ^
+	-Wno-nan-infinity-disabled ^
+	-nostdlib
+
+set wasm_flags=%common_flags% ^
+	-O3 ^
+	--target=wasm32 ^
+	-Xlinker --export-all ^
+	-Xlinker --no-entry ^
+	-Xlinker --allow-undefined ^
+	-DBUILD_UI
+
+if "%ui%"=="true" (
+	echo building ui..
+	clang src/main.cpp -o bin/index.wasm %wasm_flags% -O3
+)
+
+if %errorlevel%==1 (
+	exit /b 1
 )
