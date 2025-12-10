@@ -1,6 +1,6 @@
 #include <block/block.h>
 
-struct BlockManager
+struct BlockPool
 {
 	void init()
 	{
@@ -92,21 +92,21 @@ struct BlockManager
 	uint16_t m_count;
 };
 
-static BlockManager g_blocks;
+static BlockPool g_block_pool;
 
-Block* Block::make(const Opcode& op)
+Block* Block::make(Opcode::OpcodeType type, Value v)
 {
 	DO_ONCE 
 	{
-		g_blocks.init();
+		g_block_pool.init();
 	}
 
-	return &g_blocks.get(g_blocks.make(op));
+	return &g_block_pool.get(g_block_pool.make(Opcode(type, v)));
 }
 
 void Block::destroy()
 {
-	g_blocks.destroy(m_handle);
+	g_block_pool.destroy(m_handle);
 }
 
 void Block::append_child(Block* child)
@@ -119,7 +119,7 @@ void Block::append_child(Block* child)
 	}
 	else
 	{	
-		Block& last = g_blocks.get(m_last_child);
+		Block& last = g_block_pool.get(m_last_child);
 	
 		last.m_next = child->m_handle;
 		child->m_prev = m_last_child;
@@ -161,8 +161,8 @@ void Block::dump()
 
 		while (ch != BlockHandle::INVALID)
 		{
-			g_blocks.get(ch).dump();
-			ch = g_blocks.get(ch).m_next;
+			g_block_pool.get(ch).dump();
+			ch = g_block_pool.get(ch).m_next;
 		}
 	}
 
@@ -171,35 +171,35 @@ void Block::dump()
 
 Block* Block::parent()
 {
-	return m_parent == BlockHandle::INVALID ? nullptr :&g_blocks.get(m_parent);
+	return m_parent == BlockHandle::INVALID ? nullptr :&g_block_pool.get(m_parent);
 }
 
 Block* Block::prev()
 {
-	return m_prev == BlockHandle::INVALID ? nullptr :&g_blocks.get(m_prev);
+	return m_prev == BlockHandle::INVALID ? nullptr :&g_block_pool.get(m_prev);
 }
 
 Block* Block::next()
 {
-	return m_next == BlockHandle::INVALID ? nullptr :&g_blocks.get(m_next);
+	return m_next == BlockHandle::INVALID ? nullptr :&g_block_pool.get(m_next);
 }
 
 Block* Block::first_child()
 {
-	return m_first_child == BlockHandle::INVALID ? nullptr :&g_blocks.get(m_first_child);
+	return m_first_child == BlockHandle::INVALID ? nullptr :&g_block_pool.get(m_first_child);
 }
 
 Block* Block::last_child()
 {
-	return m_last_child == BlockHandle::INVALID ? nullptr : &g_blocks.get(m_last_child);
+	return m_last_child == BlockHandle::INVALID ? nullptr : &g_block_pool.get(m_last_child);
 }
 
 Opcode& Block::op()
 {
-	return g_blocks.get(m_handle).m_op;
+	return g_block_pool.get(m_handle).m_op;
 }
 
 Value& Block::value()
 {
-	return g_blocks.get(m_handle).m_op.value();
+	return g_block_pool.get(m_handle).m_op.value();
 }

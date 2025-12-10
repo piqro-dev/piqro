@@ -4,105 +4,136 @@
 
 #include <block/vm.h>
 
+#include <block/generator.h>
+
 static VM vm;
+
+static Generator gen;
+
+static js::RefHandle canvas;
+static js::RefHandle ctx;
+
+static vec2 screen_size;
+
+static vec2 mouse_position;
+static vec2 mouse_delta;
+
+static bool mouse_down;
+
+static Array <Block*, MAX_BLOCKS> blocks;
+
+static inline void update()
+{
+	for (uint16_t i = 0; i < blocks.count(); i++)
+	{
+		Block* b = blocks[i];
+
+		if (mouse_down && mouse_position.x > b->position.x && mouse_position.y > b->position.y && mouse_position.x < b->position.x + 50.0f && mouse_position.y < b->position.y + 50.0f)
+		{
+			b->position += mouse_delta;
+		}
+	}
+}
+
+static inline void draw()
+{
+	js::clear_rect(js::load_ref(ctx), 0.0f, 0.0f, screen_size.x, screen_size.y);
+
+	js::fill_text(js::load_ref(ctx), "fuck", 64.0f, 64.0f);
+
+	for (uint16_t i = 0; i < blocks.count(); i++)
+	{
+		const Block* b = blocks[i];
+
+		js::fill_rect(js::load_ref(ctx), b->position.x, b->position.y, 50.0f, 50.0f);
+	}
+}
+
+static inline void loop(double t)
+{
+	update();
+	draw();
+
+	js::request_animation_frame(loop);
+}
+
+static inline void on_mouse_move(js::Ref e)
+{
+	int32_t timer = 0;
+
+	mouse_delta = { js::get_number(e, "movementX"), js::get_number(e, "movementY") };
+	mouse_position = { js::get_number(e, "clientX"), js::get_number(e, "clientY") };
+	
+	if (timer)
+	{
+		js::clear_timeout(timer);
+	}
+	
+	timer = js::set_timeout([] 
+	{
+		js::remove_event_listener(js::window(), "mousemove", on_mouse_move);
+		mouse_delta = 0.0f;
+	}, 500.0f);
+
+	js::add_event_listener(js::window(), "mousemove", on_mouse_move);
+}
 
 int main() 
 {
-	
-	/*
-	Value immediates[] =
+	blocks.push(Block::make(Opcode::ADD));
+
+	canvas = js::push_ref(js::append_child(js::document_body(), js::create_element("canvas")));
+
+	ctx = js::push_ref(js::get_context(js::load_ref(canvas), "2d"));
+
+	screen_size.x = js::get_number(js::window(), "innerWidth");
+	screen_size.y = js::get_number(js::window(), "innerHeight");
+
+	js::set_number(js::load_ref(canvas), "width", screen_size.x);
+	js::set_number(js::load_ref(canvas), "height", screen_size.y);
+
+	js::add_event_listener(js::window(), "resize", [](js::Ref e)
 	{
-		Value(10.0f),
-		Value(1.0f),
-	};
-	Instruction instructions[] = 
+		screen_size.x = js::get_number(js::window(), "innerWidth");
+		screen_size.y = js::get_number(js::window(), "innerHeight");
+
+		js::set_number(js::load_ref(canvas), "innerWidth", screen_size.x);
+		js::set_number(js::load_ref(canvas), "innerHeight", screen_size.y);
+	});
+
+	js::add_event_listener(js::window(), "mousedown", [](js::Ref e)
 	{
-		Instruction(Instruction::LOAD_IMMEDIATE, 1),
-		Instruction(Instruction::LOAD_IMMEDIATE, 0),
-		Instruction(Instruction::LOAD_IMMEDIATE, 1),
-		Instruction(Instruction::CALL, 5),
-		Instruction(Instruction::ADD),
-		Instruction(Instruction::JUMP, 10),
-		Instruction(Instruction::LOAD_IMMEDIATE, 0),
-		Instruction(Instruction::LOAD_LOCAL, 0),
-		Instruction(Instruction::MUL),
-		Instruction(Instruction::RET),
-		Instruction(Instruction::NOOP),
-	};*/
+		mouse_down = true;	
+	});
 
-	Value immediates[] =
+	js::add_event_listener(js::window(), "mouseup", [](js::Ref e)
 	{
-		Value(6.0f),
-		Value(1.0f),
-		Value(2.0f),
-	};
+		mouse_down = false;	
+	});
 
-	Instruction instructions[] = 
-	{
-		Instruction(Instruction::JUMP, 5),
+	js::add_event_listener(js::window(), "mousemove", on_mouse_move);
 
-		Instruction(Instruction::LOAD_NULL),
-		Instruction(Instruction::CALL, 1),
-		Instruction(Instruction::LOAD_NULL),
-		Instruction(Instruction::RET),
-		
-		Instruction(Instruction::LOAD_NULL),
-		Instruction(Instruction::CALL, 1),
+	js::request_animation_frame(loop);
 
-		Instruction(Instruction::NOOP),
-	};
-/*
-	Instruction instructions[] = 
-	{
-		// jump to entry point
-		Instruction(Instruction::JUMP, 23),
+	/*Array <Instruction, 128> insts;
 
-		// function fib(n)
-		// if (n == 0 || n == 1)
-		Instruction(Instruction::LOAD_LOCAL, 0), // n
-		Instruction(Instruction::LOAD_NULL), // 0
-		Instruction(Instruction::EQUALS),
+	Block* var = Block::make(Opcode::SET_VAR);
+		var->append_child(Block::make(Opcode::VALUE, "hello"));
+		var->append_child(Block::make(Opcode::VALUE, 80.0f));
 
-		Instruction(Instruction::LOAD_LOCAL, 0), // n
-		Instruction(Instruction::LOAD_IMMEDIATE, 1), // 1
-		Instruction(Instruction::EQUALS),
+	gen.emit_set_variable(var, insts);
 
-		Instruction(Instruction::OR),
+	Block* add = Block::make(Opcode::ADD);
+		Block* get = Block::make(Opcode::GET_VAR);
+		get->append_child(Block::make(Opcode::VALUE, "hello"));
 
-		Instruction(Instruction::JUMP_COND, 11),
+		add->append_child(get);
+		add->append_child(Block::make(Opcode::VALUE, 75.0f));
 
-		// return n;
-		Instruction(Instruction::LOAD_LOCAL, 0),
-		Instruction(Instruction::RET),
+	gen.emit_binary_op(add, insts);
 
-		// fib(n - 1)
-		Instruction(Instruction::LOAD_LOCAL, 0), // n
-		Instruction(Instruction::LOAD_IMMEDIATE, 1), // 1
-		Instruction(Instruction::SUB),
-		Instruction(Instruction::LOAD_IMMEDIATE, 1), // argc = 1
-		Instruction(Instruction::CALL, 1), // call fib()
+	vm.init(insts.data(), insts.count(), gen.immediates().data(), gen.immediates().count());
 
-		// fib(n - 2)
-		Instruction(Instruction::LOAD_LOCAL, 0), // n
-		Instruction(Instruction::LOAD_IMMEDIATE, 2), // 2
-		Instruction(Instruction::SUB),
-		Instruction(Instruction::LOAD_IMMEDIATE, 1), // argc = 1
-		Instruction(Instruction::CALL, 1), // call fib()
-
-		// add the two function calls together
-		Instruction(Instruction::ADD),
-		Instruction(Instruction::RET),
-
-		// fib(6)
-		Instruction(Instruction::LOAD_IMMEDIATE, 0), // n
-		Instruction(Instruction::LOAD_IMMEDIATE, 1), // argc = 1
-		Instruction(Instruction::CALL, 1), // call fib()
-
-		Instruction(Instruction::NOOP)
-	};
-*/
-	vm.init(instructions, COUNT_OF(instructions), immediates, COUNT_OF(immediates));
-	
 	VM::Trap r;
 
 	while (!vm.is_done())
@@ -131,5 +162,5 @@ int main()
 		}
 
 		vm.dump_stack();
-	}
+	}*/
 }

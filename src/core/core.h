@@ -29,7 +29,28 @@ static inline void println(const char* fmt, ...)
 	#endif
 }
 
-#define ASSERT(expr) do { if (!(expr)) { println("Assertion failed: %s, in file: %s, line: %d", #expr, __FILE__, __LINE__); __builtin_unreachable(); } } while (0) 
+#if defined __wasm__
+	namespace js { extern "C" void console_error(const char*); }
+#endif
+
+static inline void errorln(const char* fmt, ...)
+{
+	__builtin_va_list args;
+
+	char out[2048];
+
+	__builtin_va_start(args, fmt);
+	stb_vsprintf(out, fmt, args);
+	__builtin_va_end(args);
+
+	#if defined __wasm__
+		js::console_error(out);
+	#else
+		__builtin_printf("%s\n", out);
+	#endif
+}
+
+#define ASSERT(expr) do { if (!(expr)) { errorln("Assertion failed: %s, in file: %s, line: %d", #expr, __FILE__, __LINE__); __builtin_unreachable(); } } while (0) 
 
 #define DO_ONCE for (static bool once = false; !once; once = true)
 

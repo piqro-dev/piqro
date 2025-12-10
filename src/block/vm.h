@@ -33,7 +33,7 @@ public:
 	};
 
 public:
-	void init(Instruction* instructions, uint16_t instruction_count, Value* immediate_table, uint16_t immediate_count);
+	void init(Instruction* instructions, uint16_t instruction_count, Value* immediates, uint16_t immediate_count);
 
 	void dump_stack();
 
@@ -104,10 +104,10 @@ private:
 	Instruction* m_instructions;
 	uint16_t m_instruction_count;
 
-	Value* m_immediate_table;
+	Value* m_immediates;
 	uint16_t m_immediate_count;
 
-	Value m_variable_table[MAX_VARIABLES];
+	Value m_variables[MAX_VARIABLES];
 
 	Array <Value, MAX_VARIABLES> m_locals;
 	Array <Value, MAX_STACK_SIZE> m_stack;

@@ -138,6 +138,9 @@ async function run() {
 			console_log(text) {
 				console.log(decode(text));
 			},
+			console_error(text) {
+				console.error(decode(text));
+			},
 			console_log_obj(obj) {
 				console.log(obj);
 			},
@@ -167,6 +170,18 @@ async function run() {
 			},
 			parse_float(str) {
 				return parseFloat(decode(str));
+			},
+			get_context(canvas, ctx) {
+				return canvas.getContext(decode(ctx));
+			},
+			fill_rect(ctx, x, y, w, h) {
+				ctx.fillRect(x, y, w, h);
+			},
+			fill_text(ctx, text, x, y) {
+				ctx.fillText(decode(text), x, y);
+			},
+			clear_rect(ctx, x, y, w, h) {
+				ctx.clearRect(x, y, w, h);
 			},
 		}
 	});

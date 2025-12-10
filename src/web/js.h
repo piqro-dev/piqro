@@ -71,6 +71,8 @@ void console_log_obj(Ref);
 
 void console_log(const char*);
 
+void console_error(const char*);
+
 int32_t set_timeout(void (*fn)(), float t);
 
 void clear_timeout(int32_t);
@@ -88,6 +90,14 @@ void set_attribute(Ref, const char*, const char*);
 Ref get_computed_style(Ref);
 
 float parse_float(const char*);
+
+Ref get_context(Ref, const char*);
+
+void fill_rect(Ref, float, float, float, float);
+
+void fill_text(Ref, const char*, float, float);
+
+void clear_rect(Ref, float, float, float, float);
 
 };
 

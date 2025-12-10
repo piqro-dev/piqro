@@ -16,9 +16,20 @@ public:
 		return m_data[m_count++] = v;
 	}
 
+	template <typename ... Args>
+	inline T& emplace(const Args& ... args)
+	{
+		return m_data[m_count++] = T(args...);
+	}
+
 	inline T& pop()
 	{
 		return m_data[--m_count];
+	}
+
+	inline T* data()
+	{
+		return m_data;
 	}
 
 	inline T& last()

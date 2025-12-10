@@ -4,4 +4,6 @@
 	#include <block/block.cpp>
 
 	#include <block/vm.cpp>
+
+	#include <block/generator.cpp>
 #endif

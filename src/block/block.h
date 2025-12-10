@@ -13,7 +13,9 @@ enum BlockHandle : uint16_t
 
 struct Block
 {
-	static Block* make(const Opcode& op);
+	friend struct BlockPool;
+	
+	static Block* make(Opcode::OpcodeType type, Value v = {});
 
 	void destroy();
 
@@ -35,7 +37,8 @@ struct Block
 
 	Value& value();
 
-	friend struct BlockManager;
+public:
+	vec2 position;
 
 private:
 	Opcode m_op;

@@ -1,11 +1,11 @@
 #include <block/vm.h>
 
-void VM::init(Instruction* instructions, uint16_t instruction_count, Value* immediate_table, uint16_t immediate_count)
+void VM::init(Instruction* instructions, uint16_t instruction_count, Value* immediates, uint16_t immediate_count)
 {
 	m_instructions = instructions;
 	m_instruction_count = instruction_count;
 
-	m_immediate_table = immediate_table;
+	m_immediates = immediates;
 	m_immediate_count = immediate_count;
 
 	m_locals.init();
@@ -224,7 +224,7 @@ VM::Trap VM::LOAD_IMMEDIATE(uint16_t idx)
 
 	VERIFY_STACK_OVERFLOW();
 
-	m_stack.push(m_immediate_table[idx]);
+	m_stack.push(m_immediates[idx]);
 
 	return SUCCESS;
 }
@@ -238,7 +238,7 @@ VM::Trap VM::LOAD_VAR(uint16_t idx)
 
 	VERIFY_STACK_OVERFLOW();
 
-	m_stack.push(m_variable_table[idx]);
+	m_stack.push(m_variables[idx]);
 
 	return SUCCESS;
 }
@@ -252,7 +252,7 @@ VM::Trap VM::STORE_VAR(uint16_t idx)
 
 	VERIFY_STACK_UNDERFLOW();
 
-	m_variable_table[idx] = m_stack.pop();
+	m_variables[idx] = m_stack.pop();
 
 	return SUCCESS;
 }
