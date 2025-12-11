@@ -84,15 +84,19 @@ async function run() {
 			atoi(x) { 
 				return Number(decode(x)); 
 			},
+			sinf: Math.sin,
 
-			window() {
+			get_window() {
 				return window;
 			},
-			document_body() {
+			get_document_body() {
 				return document.body;
 			},
 			null() {
 				return null;
+			},
+			obj() {
+				return {};
 			},
 
 			set_value(obj, key, value) {
@@ -171,8 +175,9 @@ async function run() {
 			parse_float(str) {
 				return parseFloat(decode(str));
 			},
-			get_context(canvas, ctx) {
-				return canvas.getContext(decode(ctx));
+
+			get_context(canvas, ctx, options) {
+				return canvas.getContext(decode(ctx), options);
 			},
 			fill_rect(ctx, x, y, w, h) {
 				ctx.fillRect(x, y, w, h);

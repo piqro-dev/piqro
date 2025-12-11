@@ -35,11 +35,17 @@ extern "C"
 
 int32_t atoi(const char*);
 
-Ref window();
+//
+// types
+//
 
-Ref document_body();
+Ref get_window();
+
+Ref get_document_body();
 
 Ref null();
+
+Ref obj();
 
 Ref set_value(Ref, const char*, Ref);
 
@@ -52,6 +58,10 @@ Ref get_value(Ref, const char*);
 float get_number(Ref, const char*);
 
 void get_str(Ref, const char*, char*);
+
+//
+// dom
+//
 
 Ref add_event_listener(Ref, const char*, void (*fn)(Ref));
 
@@ -91,7 +101,11 @@ Ref get_computed_style(Ref);
 
 float parse_float(const char*);
 
-Ref get_context(Ref, const char*);
+//
+// canvas 
+//
+
+Ref get_context(Ref, const char*, Ref);
 
 void fill_rect(Ref, float, float, float, float);
 

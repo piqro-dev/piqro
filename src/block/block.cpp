@@ -203,3 +203,8 @@ Value& Block::value()
 {
 	return g_block_pool.get(m_handle).m_op.value();
 }
+
+BlockHandle Block::handle() const
+{
+	return m_handle;
+}

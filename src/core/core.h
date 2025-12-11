@@ -7,9 +7,11 @@
 #include <stb_sprintf.h>
 
 using vec2 = float __attribute__((ext_vector_type(2)));
+using vec4 = float __attribute__((ext_vector_type(4)));
 
 #if defined __wasm__
 	namespace js { extern "C" void console_log(const char*); }
+	namespace js { extern "C" void console_error(const char*); }
 #endif
 
 static inline void println(const char* fmt, ...)
@@ -28,10 +30,6 @@ static inline void println(const char* fmt, ...)
 		__builtin_printf("%s\n", out);
 	#endif
 }
-
-#if defined __wasm__
-	namespace js { extern "C" void console_error(const char*); }
-#endif
 
 static inline void errorln(const char* fmt, ...)
 {

@@ -44,7 +44,7 @@ public:
 
 	inline T& remove(size_t at)
 	{
-		m_data[at] = pop();
+		return m_data[at] = pop();
 	}
 
 	inline size_t count()

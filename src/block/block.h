@@ -37,8 +37,7 @@ struct Block
 
 	Value& value();
 
-public:
-	vec2 position;
+	BlockHandle handle() const;
 
 private:
 	Opcode m_op;
