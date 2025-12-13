@@ -1,6 +1,6 @@
 #pragma once
 
-#include <core/core.h>
+#include <base/common.h>
 
 template <typename T, size_t N>
 struct Array
@@ -13,12 +13,14 @@ public:
 
 	inline T& push(const T& v = {})
 	{
+		ASSERT(m_count < N);
 		return m_data[m_count++] = v;
 	}
 
 	template <typename ... Args>
 	inline T& emplace(const Args& ... args)
 	{
+		ASSERT(m_count < N);
 		return m_data[m_count++] = T(args...);
 	}
 

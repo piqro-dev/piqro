@@ -1,6 +1,6 @@
 #pragma once
 
-#include <core/core.h>
+#include <base/common.h>
 
 #define DEFINE_INSTRUCTIONS \
 	INST(LOAD_IMMEDIATE) \

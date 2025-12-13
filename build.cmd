@@ -12,7 +12,6 @@ for %%a in (%*) do set "%%a=true"
 
 set common_flags=-std=gnu++2c ^
 	-Isrc ^
-	-fenable-matrix ^
 	-ffast-math ^
 	-fuse-ld=lld ^
 	-Wno-c99-designator ^
@@ -20,17 +19,13 @@ set common_flags=-std=gnu++2c ^
 	-Wno-nan-infinity-disabled ^
 	-nostdlib
 
-set wasm_flags=%common_flags% ^
-	-O3 ^
-	--target=wasm32 ^
-	-Xlinker --export-all ^
-	-Xlinker --no-entry ^
-	-Xlinker --allow-undefined ^
+set ui_windows_flags=%common_flags% ^
+	-Xlinker -subsystem:console ^
+	-O2 ^
 	-DBUILD_UI
 
 if "%ui%"=="true" (
-	echo building ui..
-	clang src/main.cpp -o bin/index.wasm %wasm_flags% -O3
+	clang src/main.cpp -o bin/ui.exe %ui_windows_flags% 
 )
 
 if %errorlevel%==1 (

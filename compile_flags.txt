@@ -1,5 +1,4 @@
 -std=gnu++2c
---target=wasm32
 -Wno-c99-designator
 -Isrc 
 

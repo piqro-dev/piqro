@@ -1,9 +1,9 @@
 #if defined BUILD_UI
-	#include <web/index.cpp>
+	#include <ui/main.cpp>
 
-	#include <block/block.cpp>
+	#include <ui/window_win32.cpp>
 
-	#include <block/vm.cpp>
+	#include <ui/os_win32.cpp>
 
-	#include <block/generator.cpp>
+	#include <ui/gfx_d3d11.cpp>
 #endif

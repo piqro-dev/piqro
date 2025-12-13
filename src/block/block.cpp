@@ -4,22 +4,22 @@ struct BlockPool
 {
 	void init()
 	{
-		m_first_free = BlockHandle::INVALID;
+		m_first_free = BlockId::INVALID;
 		m_count = 0;
 	}
 
-	Block& get(BlockHandle h)
+	Block& get(BlockId h)
 	{
 		return m_elements[h].b;
 	}
 
-	BlockHandle make(const Opcode& op)
+	BlockId make(const Opcode& op)
 	{
-		BlockHandle h;
+		BlockId h;
 	
-		if (m_first_free == BlockHandle::INVALID)
+		if (m_first_free == BlockId::INVALID)
 		{
-			h = static_cast<BlockHandle>(m_count++);
+			h = static_cast<BlockId>(m_count++);
 		}
 		else
 		{
@@ -32,21 +32,21 @@ struct BlockPool
 		b.m_op = op;
 		
 		b.m_handle = h;
-		b.m_parent = BlockHandle::INVALID;
-		b.m_next = BlockHandle::INVALID;
-		b.m_prev = BlockHandle::INVALID;
-		b.m_first_child = BlockHandle::INVALID;
-		b.m_last_child = BlockHandle::INVALID;
+		b.m_parent = BlockId::INVALID;
+		b.m_next = BlockId::INVALID;
+		b.m_prev = BlockId::INVALID;
+		b.m_first_child = BlockId::INVALID;
+		b.m_last_child = BlockId::INVALID;
 	
 		return h;
 	}
 
-	void destroy(BlockHandle h)
+	void destroy(BlockId h)
 	{
 		const Block& b = get(h);
 	
 		// check siblings if we have a parent
-		if (b.m_parent != BlockHandle::INVALID)
+		if (b.m_parent != BlockId::INVALID)
 		{
 			Block& parent = get(b.m_parent);
 	
@@ -55,23 +55,23 @@ struct BlockPool
 				parent.m_first_child = b.m_next;
 			}
 	
-			if (b.m_prev != BlockHandle::INVALID)
+			if (b.m_prev != BlockId::INVALID)
 			{
 				get(b.m_prev).m_next = b.m_next;
 			}
 	
-			if (b.m_next != BlockHandle::INVALID)
+			if (b.m_next != BlockId::INVALID)
 			{
 				get(b.m_next).m_prev = b.m_prev;
 			}
 		}
 	
 		// nuke all children if there are any
-		if (b.m_first_child != BlockHandle::INVALID) 
+		if (b.m_first_child != BlockId::INVALID) 
 		{
-			BlockHandle ch = b.m_first_child;
+			BlockId ch = b.m_first_child;
 	
-			while (ch != BlockHandle::INVALID)
+			while (ch != BlockId::INVALID)
 			{
 				destroy(ch);
 				ch = get(ch).m_next; 
@@ -85,10 +85,10 @@ struct BlockPool
 	struct
 	{
 		Block b;
-		BlockHandle next_free;
+		BlockId next_free;
 	} m_elements[MAX_BLOCKS];
 
-	BlockHandle m_first_free;
+	BlockId m_first_free;
 	uint16_t m_count;
 };
 
@@ -113,7 +113,7 @@ void Block::append_child(Block* child)
 {
 	child->m_parent = m_handle;
 
-	if (m_first_child == BlockHandle::INVALID)
+	if (m_first_child == BlockId::INVALID)
 	{
 		m_first_child = child->m_handle;
 	}
@@ -155,11 +155,11 @@ void Block::dump()
 
 	indent++;
 	
-	if (m_first_child != BlockHandle::INVALID)
+	if (m_first_child != BlockId::INVALID)
 	{
-		BlockHandle ch = m_first_child;
+		BlockId ch = m_first_child;
 
-		while (ch != BlockHandle::INVALID)
+		while (ch != BlockId::INVALID)
 		{
 			g_block_pool.get(ch).dump();
 			ch = g_block_pool.get(ch).m_next;
@@ -171,27 +171,27 @@ void Block::dump()
 
 Block* Block::parent()
 {
-	return m_parent == BlockHandle::INVALID ? nullptr :&g_block_pool.get(m_parent);
+	return m_parent == BlockId::INVALID ? nullptr : &g_block_pool.get(m_parent);
 }
 
 Block* Block::prev()
 {
-	return m_prev == BlockHandle::INVALID ? nullptr :&g_block_pool.get(m_prev);
+	return m_prev == BlockId::INVALID ? nullptr : &g_block_pool.get(m_prev);
 }
 
 Block* Block::next()
 {
-	return m_next == BlockHandle::INVALID ? nullptr :&g_block_pool.get(m_next);
+	return m_next == BlockId::INVALID ? nullptr : &g_block_pool.get(m_next);
 }
 
 Block* Block::first_child()
 {
-	return m_first_child == BlockHandle::INVALID ? nullptr :&g_block_pool.get(m_first_child);
+	return m_first_child == BlockId::INVALID ? nullptr : &g_block_pool.get(m_first_child);
 }
 
 Block* Block::last_child()
 {
-	return m_last_child == BlockHandle::INVALID ? nullptr : &g_block_pool.get(m_last_child);
+	return m_last_child == BlockId::INVALID ? nullptr : &g_block_pool.get(m_last_child);
 }
 
 Opcode& Block::op()
@@ -204,7 +204,7 @@ Value& Block::value()
 	return g_block_pool.get(m_handle).m_op.value();
 }
 
-BlockHandle Block::handle() const
+BlockId Block::handle() const
 {
 	return m_handle;
 }

@@ -1,12 +1,12 @@
 #pragma once
 
-#include <core/core.h>
+#include <base/common.h>
 
 #include <block/opcode.h>
 
 static constexpr uint16_t MAX_BLOCKS = 512;
 
-enum BlockHandle : uint16_t
+enum BlockId : uint16_t
 {
 	INVALID = static_cast<uint16_t>(-1)
 };
@@ -37,15 +37,15 @@ struct Block
 
 	Value& value();
 
-	BlockHandle handle() const;
+	BlockId handle() const;
 
 private:
 	Opcode m_op;
 
-	BlockHandle m_handle;
-	BlockHandle m_parent;
-	BlockHandle m_prev;
-	BlockHandle m_next;
-	BlockHandle m_first_child;
-	BlockHandle m_last_child;
+	BlockId m_handle;
+	BlockId m_parent;
+	BlockId m_prev;
+	BlockId m_next;
+	BlockId m_first_child;
+	BlockId m_last_child;
 };

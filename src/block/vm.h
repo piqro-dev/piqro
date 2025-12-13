@@ -1,8 +1,8 @@
 #pragma once
 
-#include <core/core.h>
+#include <base/common.h>
 
-#include <core/array.h>
+#include <base/array.h>
 
 #include <block/instruction.h>
 
