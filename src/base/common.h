@@ -1,36 +1,6 @@
 #pragma once
 
 #include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-
-//
-// system includes
-//
-
-#if defined _WIN32
-	#include <windows.h>
-	#include <windowsx.h>
-
-	#include <d3d11.h>
-	#include <dxgi.h>
-#endif
-
-//
-// system libraries
-//
-
-#if defined _WIN32
-	#pragma comment(lib, "vcruntime")
-	#pragma comment(lib, "msvcrt")
-	#pragma comment(lib, "ucrt")
-	#pragma comment(lib, "kernel32")
-	#pragma comment(lib, "user32")
-
-	#pragma comment(lib, "d3d11")
-	#pragma comment(lib, "dxgi")
-	#pragma comment(lib, "dxguid")
-#endif
 
 //
 // common includes

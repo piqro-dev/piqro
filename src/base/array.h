@@ -29,15 +29,26 @@ public:
 		return m_data[--m_count];
 	}
 
-	inline T* data()
+	inline T* begin()
 	{
-		return m_data;
+		return m_data;	
 	}
 
-	inline T& last()
+	inline T* end()
 	{
-		return m_data[m_count - 1];
+		return m_data + m_count;
 	}	
+
+	inline T* begin() const
+	{
+		return m_data;	
+	}
+
+	inline T* end() const
+	{
+		return m_data + m_count;
+	}	
+
 
 	inline void trim_end(size_t from)
 	{

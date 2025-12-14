@@ -43,7 +43,7 @@ public:
 	}
 
 private:
-	union 
+	struct 
 	{
 		T data;
 		size_t next_free;

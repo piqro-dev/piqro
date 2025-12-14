@@ -1,56 +1,48 @@
 #include <block/block.h>
 
+#include <base/free_list.h>
+
 struct BlockPool
 {
-	void init()
+public:
+	inline void init()
 	{
-		m_first_free = BlockId::INVALID;
-		m_count = 0;
+		m_blocks.init();
 	}
 
-	Block& get(BlockId h)
+	inline Block& get(BlockId id)
 	{
-		return m_elements[h].b;
+		return m_blocks[id];
 	}
 
-	BlockId make(const Opcode& op)
+	inline BlockId make(const Opcode& op)
 	{
-		BlockId h;
-	
-		if (m_first_free == BlockId::INVALID)
-		{
-			h = static_cast<BlockId>(m_count++);
-		}
-		else
-		{
-			h = m_first_free;
-			m_first_free = m_elements[h].next_free;
-		}
-	
-		Block& b = get(h);
+		BlockId id = static_cast<BlockId>(m_blocks.push());
+
+		Block& b = get(id);
 	
 		b.m_op = op;
 		
-		b.m_handle = h;
+		b.m_handle = id;
 		b.m_parent = BlockId::INVALID;
 		b.m_next = BlockId::INVALID;
 		b.m_prev = BlockId::INVALID;
 		b.m_first_child = BlockId::INVALID;
 		b.m_last_child = BlockId::INVALID;
 	
-		return h;
+		return id;
 	}
 
-	void destroy(BlockId h)
+	inline void destroy(BlockId id)
 	{
-		const Block& b = get(h);
+		const Block& b = get(id);
 	
 		// check siblings if we have a parent
 		if (b.m_parent != BlockId::INVALID)
 		{
 			Block& parent = get(b.m_parent);
 	
-			if (parent.m_first_child == h)
+			if (parent.m_first_child == id)
 			{
 				parent.m_first_child = b.m_next;
 			}
@@ -78,18 +70,11 @@ struct BlockPool
 			}
 		}
 	
-		m_elements[h].next_free = m_first_free;
-		m_first_free = b.m_handle;
+		m_blocks.remove(id);
 	}
 
-	struct
-	{
-		Block b;
-		BlockId next_free;
-	} m_elements[MAX_BLOCKS];
-
-	BlockId m_first_free;
-	uint16_t m_count;
+private:
+	FreeList <Block, MAX_BLOCKS> m_blocks;
 };
 
 static BlockPool g_block_pool;

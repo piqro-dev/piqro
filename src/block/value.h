@@ -63,22 +63,22 @@ struct Value
 		{
 			case Value::NUMBER:
 			{
-				stb_snprintf(out, n, "%f", m_number);
+				__builtin_snprintf(out, n, "%f", m_number);
 			} break;
 
 			case Value::BOOLEAN:
 			{
-				stb_snprintf(out, n, "%s", m_boolean ? "true" : "false");
+				__builtin_snprintf(out, n, "%s", m_boolean ? "true" : "false");
 			} break;
 
 			case Value::STRING:
 			{
-				stb_snprintf(out, n, "%s", m_string);
+				__builtin_snprintf(out, n, "%s", m_string);
 			} break;
 
 			case Value::UNDEFINED:
 			{
-				stb_snprintf(out, n, "(undefined)");
+				__builtin_snprintf(out, n, "(undefined)");
 			} break;
 		}
 

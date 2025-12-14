@@ -2,6 +2,17 @@
 
 #include <base/common.h>
 
+#define STB_SPRINTF_IMPLEMENTATION
+#define STB_SPRINTF_DECORATE(name) name
+
+#include <third_party/stb_sprintf.h>
+
+#if defined __wasm__
+	namespace js { extern "C" void console_log(const char *); }
+	namespace js { extern "C" void console_error(const char *); }
+#endif
+
+__attribute__((format(printf, 1, 2)))
 static inline void println(const char* fmt, ...)
 {
 	__builtin_va_list args;
@@ -9,35 +20,22 @@ static inline void println(const char* fmt, ...)
 	char out[2048];
 
 	__builtin_va_start(args, fmt);
-	int len = __builtin_vsprintf(out, fmt, args);
+	__builtin_vsprintf(out, fmt, args);
 	__builtin_va_end(args);
 
-	out[len] = '\n';
-	out[len + 1] = '\0';
-
-	wchar_t w_out[2048];
-
-	MultiByteToWideChar(CP_UTF8, 0, out, -1, w_out, 2048);
-	WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), w_out, __builtin_wcslen(w_out) + 1, nullptr, nullptr);
+	js::console_log(out);
 }
 
+__attribute__((format(printf, 1, 2)))
 static inline void errorln(const char* fmt, ...)
 {
 	__builtin_va_list args;
 
 	char out[2048];
 
-	__builtin_strcpy(out, "ERROR: ");
-
 	__builtin_va_start(args, fmt);
-	int len = __builtin_vsprintf(out + __builtin_strlen(out), fmt, args);
+	__builtin_vsprintf(out, fmt, args);
 	__builtin_va_end(args);
 
-	out[len] = '\n';
-	out[len + 1] = '\0';
-
-	wchar_t w_out[2048];
-
-	MultiByteToWideChar(CP_UTF8, 0, out, -1, w_out, 2048);
-	WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), w_out, __builtin_wcslen(w_out) + 1, nullptr, nullptr);
+	js::console_error(out);
 }

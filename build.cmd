@@ -19,13 +19,16 @@ set common_flags=-std=gnu++2c ^
 	-Wno-nan-infinity-disabled ^
 	-nostdlib
 
-set ui_windows_flags=%common_flags% ^
-	-Xlinker -subsystem:console ^
+set ui_wasm_flags=%common_flags% ^
+	-Xlinker --export-all ^
+	-Xlinker --no-entry ^
+	-Xlinker --allow-undefined ^
 	-O2 ^
+	--target=wasm32 ^
 	-DBUILD_UI
 
 if "%ui%"=="true" (
-	clang src/main.cpp -o bin/ui.exe %ui_windows_flags% 
+	clang src/main.cpp -o bin/index.wasm %ui_wasm_flags%  
 )
 
 if %errorlevel%==1 (

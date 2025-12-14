@@ -261,7 +261,7 @@ VM::Trap VM::LOAD_LOCAL(uint16_t idx)
 {
 	VERIFY_STACK_OVERFLOW();
 
-	const CallFrame& cf = m_call_frames.last();
+	const CallFrame& cf = *m_call_frames.end();
 
 	if (cf.local_base + idx > m_locals.count())
 	{
@@ -365,7 +365,7 @@ VM::Trap VM::RET()
 {
 	const CallFrame& cf = m_call_frames.pop();
 
-	Value top = m_stack.last();
+	Value top = m_stack.end();
 
 	m_stack.trim_end(cf.stack_base - 1);
 	m_locals.trim_end(cf.local_base);
