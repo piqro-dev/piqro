@@ -1,0 +1,60 @@
+* {
+	padding: 0;
+	margin: 0;
+}
+
+:root {
+	--toolbar-height: 50px;
+}
+
+.root-container {
+	height: 100vh;
+
+	display: flex;
+	flex-wrap: wrap;
+	align-content: stretch;
+}
+
+.toolbar {
+	flex-grow: 1;
+	align-self: stretch;
+
+	width: 100%;
+	height: var(--toolbar-height);
+
+	background-color: red;
+}
+
+.text-editor {
+	flex-grow: 0;
+	align-self: stretch;
+
+	width: 50%;
+	height: calc(100% - var(--toolbar-height));
+
+	background-color: blue;
+}
+
+.text-editor textarea {
+	margin: 5%;
+
+	width: 90%;
+	height: 75%;
+
+	resize: none;
+}
+
+.text-editor button {
+	margin-top: -5%;
+	margin-left: 5%;
+}
+
+.canvas {
+	flex-grow: 0;
+	align-self: stretch;
+
+	width: 50%;
+	height: calc(100% - var(--toolbar-height));
+
+	background-color: green;
+}

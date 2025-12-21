@@ -23,7 +23,9 @@ static inline void println(const char* fmt, ...)
 	__builtin_vsprintf(out, fmt, args);
 	__builtin_va_end(args);
 
-	js::console_log(out);
+	#if defined __wasm__
+		js::console_log(out);
+	#endif
 }
 
 __attribute__((format(printf, 1, 2)))
@@ -37,5 +39,7 @@ static inline void errorln(const char* fmt, ...)
 	__builtin_vsprintf(out, fmt, args);
 	__builtin_va_end(args);
 
-	js::console_error(out);
+	#if defined __wasm__
+		js::console_error(out);
+	#endif
 }

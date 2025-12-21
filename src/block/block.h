@@ -13,9 +13,8 @@ enum BlockId : uint16_t
 
 struct Block
 {
-	friend struct BlockPool;
-	
-	static Block* make(Opcode::OpcodeType type, Value v = {});
+public:	
+	static Block* make(Opcode::OpcodeType type, const Value& v = {});
 
 	void destroy();
 
@@ -48,4 +47,6 @@ private:
 	BlockId m_next;
 	BlockId m_first_child;
 	BlockId m_last_child;
+	
+	friend struct BlockPool;
 };

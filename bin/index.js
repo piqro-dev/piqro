@@ -1,5 +1,7 @@
 "use strict";
 
+//<script src="index.js"></script>
+
 async function run() {
 	let encoder = new TextEncoder();
 	let decoder = new TextDecoder('utf-8');

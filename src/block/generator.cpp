@@ -32,7 +32,7 @@ void Generator::emit_expression(Block* block, Array <Instruction, N>& out)
 
 		default:
 		{
-			ASSERT(false && "TODO: unhandled expression");
+			ASSERT(false && "Unknown opcode");
 		} break;
 	}
 }
@@ -94,7 +94,7 @@ void Generator::emit_binary_op(Block* block, Array <Instruction, N>& out)
 
 		default:
 		{
-			ASSERT(false && "TODO: unhandled binary op");
+			ASSERT(false && "Unknown binary op");
 		} break;
 	}
 }

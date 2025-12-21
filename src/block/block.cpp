@@ -79,7 +79,7 @@ private:
 
 static BlockPool g_block_pool;
 
-Block* Block::make(Opcode::OpcodeType type, Value v)
+Block* Block::make(Opcode::OpcodeType type, const Value& v)
 {
 	DO_ONCE 
 	{

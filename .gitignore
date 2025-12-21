@@ -1,3 +1,4 @@
 bin/*
 !bin/index.html
 !bin/index.js
+!bin/style.css
