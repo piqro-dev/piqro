@@ -8,9 +8,7 @@ static inline bool identifier_too_long(Token t)
 }
 
 Generator::Generator(const char* source_code, const Token* tokens, uint16_t token_count)
-	: m_source_code(source_code), m_tokens(tokens), m_token_count(token_count) {}
-
-
+	: m_source_code(source_code), m_tokens(tokens), m_token_count(token_count), m_idx(0), m_scope_depth(0) {}
 
 void Generator::dump_immediates()
 {
@@ -33,6 +31,11 @@ void Generator::dump_variables()
 	{
 		println("\t%d: %s", i, m_variables[i].name);
 	}
+}
+
+Array <Value, Generator::MAX_IMMEDIATES>& Generator::immediates()
+{
+	return m_immediates;	
 }
 
 template <size_t N>
@@ -95,15 +98,10 @@ void Generator::emit_expression(Array <Instruction, N>& instructions)
 
 // <ident> = <expr>
 template <size_t N>
-void Generator::emit_var_assignment(Array <Instruction, N>& instructions)
+void Generator::emit_assign_statement(Array <Instruction, N>& instructions)
 {
 	// <ident>
 	Token ident = eat();
-
-	if (ident.type != Token::IDENTIFIER)
-	{
-		errorln("Error: Expected identifier, got %s", ident.as_string());
-	}
 
 	char name[256] = {};
 	ident.value(m_source_code, name, 256);
@@ -133,11 +131,6 @@ void Generator::emit_var_statement(Array <Instruction, N>& instructions)
 	// <ident>
 	Token id = eat();
 
-	if (id.type != Token::IDENTIFIER)
-	{
-		errorln("Error: Expected identifier near %s, got %s", var.as_string(), id.as_string());
-	}
-
 	char name[256] = {};
 	id.value(m_source_code, name, 256);
 
@@ -158,8 +151,84 @@ void Generator::emit_var_statement(Array <Instruction, N>& instructions)
 
 	// <expr>
 	emit_expression(instructions);
+
+	Variable& v = get_or_create_variable(name);
+
+	if (m_scopes.count() > 0)
+	{
+		v.local_idx = m_locals.count();
+	}
 	
 	instructions.emplace(Instruction::STORE_VAR, get_or_create_variable(name).idx);
+}
+
+// repeat <expr> {}
+template <size_t N>
+void Generator::emit_repeat_statement(Array <Instruction, N>& instructions)
+{
+	// repeat
+	Token repeat = eat();
+
+	// <expr>
+	emit_expression(instructions);
+
+	// {}
+	emit_scope(instructions);
+}
+
+template <size_t N>
+void Generator::emit_statement(Array <Instruction, N>& instructions)
+{
+	// var <ident> = ...
+	if (peek().type == Token::VAR && peek(1).type == Token::IDENTIFIER && peek(2).type == Token::EQUALS)
+	{
+		emit_var_statement(instructions);
+	}
+	// <ident> = ...
+	else if (peek().type == Token::IDENTIFIER && peek(1).type == Token::EQUALS)
+	{
+		emit_assign_statement(instructions);
+	}
+	// repeat <expr> {}
+	else if (peek().type == Token::REPEAT)
+	{
+		emit_repeat_statement(instructions);
+	}
+	else
+	{
+		errorln("TODO: Unhandled statement! Last token: %s", peek().as_string());
+	}
+}
+
+template <size_t N>
+void Generator::emit_scope(Array <Instruction, N>& instructions)
+{
+	// {
+	Token open = eat();
+
+	if (open.type != Token::OPEN_CURLY)
+	{
+		errorln("Error: Expected `{`, got %s", open.as_string());
+	}
+
+	Scope& scope = m_scopes.push();
+
+	scope.first_inst = instructions.count();
+	scope.local_base = m_locals.count();
+
+	// Statements
+	while (peek().type != Token::CLOSE_CURLY)
+	{
+		emit_statement(instructions);
+	}
+
+	// }
+	Token close = eat();
+
+	if (close.type != Token::CLOSE_CURLY)
+	{
+		errorln("Error: Expected `}`, got %s", close.as_string());
+	}
 }
 
 template <size_t N>
@@ -167,28 +236,10 @@ void Generator::emit_program(Array <Instruction, N>& instructions)
 {
 	while (m_idx < m_token_count)
 	{
-		// var <ident> = ...
-		if (peek().type == Token::VAR && peek(1).type == Token::IDENTIFIER && peek(2).type == Token::EQUALS)
-		{
-			emit_var_statement(instructions);
-		}
-		// <ident> = ...
-		else if (peek().type == Token::IDENTIFIER && peek(1).type == Token::EQUALS)
-		{
-			emit_var_assignment(instructions);
-		}
-		else
-		{
-			errorln("TODO: Unhandled statement.. Last token: %s", peek().as_string());
-		}
+		emit_statement(instructions);
 	}
 
 	instructions.emplace(Instruction::HALT);
-}
-
-Array <Value, Generator::MAX_IMMEDIATES>& Generator::immediates()
-{
-	return m_immediates;	
 }
 
 Token Generator::peek(int16_t offset)

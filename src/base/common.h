@@ -1,13 +1,13 @@
 #pragma once
 
 // 
-// system libraries
+// System libraries
 //
 
 #include <stdint.h>
 
 //
-// system includes
+// System includes
 //
 
 #if !defined __wasm__
@@ -19,13 +19,13 @@
 #endif
 
 //
-// common includes
+// Common includes
 //
 
 #include <base/log.h>
 
 //
-// common types
+// Common types
 //
 
 using uvec2 = uint32_t __attribute__((ext_vector_type(2)));
@@ -35,7 +35,7 @@ using vec2 = float __attribute__((ext_vector_type(2)));
 using vec4 = float __attribute__((ext_vector_type(4)));
 
 //
-// common macros
+// Common macros
 //
 
 #define ASSERT(expr) do { if (!(expr)) { errorln("Assertion failed: %s, in file %s, on line %d", #expr, __FILE__, __LINE__); __builtin_trap(); } } while (0) 

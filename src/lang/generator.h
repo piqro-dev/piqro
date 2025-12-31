@@ -14,6 +14,12 @@ struct Variable
 	uint16_t idx;
 };
 
+struct Scope
+{
+	uint16_t first_inst;
+	uint16_t local_base;
+};
+
 struct Generator
 {
 public:
@@ -21,12 +27,20 @@ public:
 
 	static constexpr uint16_t MAX_VARIABLES = 512;
 
+	static constexpr uint16_t MAX_SCOPES = 16;
+
 public:
 	Generator(const char* source_code, const Token* tokens, uint16_t token_count);
 
 	void dump_immediates();
 
 	void dump_variables();
+	
+	Array <Value, MAX_IMMEDIATES>& immediates();
+
+	//
+	// Expressions
+	//
 
 	template <size_t N>
 	void emit_number_expression(Array <Instruction, N>& instructions);
@@ -37,16 +51,35 @@ public:
 	template <size_t N>
 	void emit_expression(Array <Instruction, N>& instructions);
 
+	//
+	// Statements
+	//
+
 	template <size_t N>
-	void emit_var_assignment(Array <Instruction, N>& instructions);
+	void emit_assign_statement(Array <Instruction, N>& instructions);
 
 	template <size_t N>
 	void emit_var_statement(Array <Instruction, N>& instructions);
 
 	template <size_t N>
-	void emit_program(Array <Instruction, N>& instructions);
+	void emit_repeat_statement(Array <Instruction, N>& instructions);
 
-	Array <Value, MAX_IMMEDIATES>& immediates();
+	template <size_t N>
+	void emit_statement(Array <Instruction, N>& instructions);
+
+	//
+	// Scope
+	//
+
+	template <size_t N>
+	void emit_scope(Array <Instruction, N>& instructions);
+
+	//
+	// Program
+	//
+
+	template <size_t N>
+	void emit_program(Array <Instruction, N>& instructions);
 
 private:
 	Token peek(int16_t offset = 0);
@@ -66,6 +99,8 @@ private:
 
 	Array <Value, MAX_IMMEDIATES> m_immediates;
 	Array <Variable, MAX_VARIABLES> m_variables;
-	
+	Array <Variable, MAX_VARIABLES> m_locals;
+	Array <Scope, MAX_SCOPES> m_scopes;
+
 	uint16_t m_idx;
 };

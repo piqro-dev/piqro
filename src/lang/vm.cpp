@@ -272,7 +272,7 @@ VM::Trap VM::LOAD_NULL()
 	return SUCCESS;
 }
 
-// these ones are very repetative
+// These ones are very repetative
 
 #define DEFINE_OPS \
 	OP(ADD, +) \

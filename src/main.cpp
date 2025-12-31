@@ -8,17 +8,16 @@
 
 static constexpr char src[] = 
 R"(
-
-var f = 67.0
-var g = f
-g = 10
+repeat 50 {
+	var a = 10
+}
 )";
 
 int main() 
 {
 	Tokenizer tok(src);
 
-	static Array <Token, 1024> tokens;
+	Array <Token, 1024> tokens;
 	tok.tokenize(tokens);
 
 	println("\nTokens:");
@@ -28,12 +27,19 @@ int main()
 		char buf[128] = {};
 		t.value(src, buf, 128);
 		
-		println("\t%s, %s", t.as_string(), buf);
+		if (t.type >= Token::STRING_LIT && t.type <= Token::IDENTIFIER)
+		{
+			println("\t%-20s %s", t.as_string(), buf);
+		}
+		else
+		{
+			println("\t%-20s", t.as_string());
+		}
 	}
 
 	Generator gen(src, tokens.begin(), tokens.count());
 
-	static Array <Instruction, 2048> instructions;
+	Array <Instruction, 2048> instructions;
 	gen.emit_program(instructions);
 
 	gen.dump_immediates();
@@ -43,9 +49,9 @@ int main()
 
 	for (const Instruction& it : instructions)
 	{
-		println("\t%s, %d", it.as_string(), it.param);
+		println("\t%-20s %hu", it.as_string(), it.param);
 	}
-
+/*
 	VM vm(instructions.begin(), instructions.count(), gen.immediates().begin(), gen.immediates().count());
 
 	println("\nExecution:");
@@ -56,8 +62,8 @@ int main()
 
 		const Instruction& inst = vm.current_instruction();
 
-		println("\n-> %s, %d\n", inst.as_string(), inst.param);
-	} while (vm.execute() == VM::SUCCESS);
+		println("\n-> %s, %hu\n", inst.as_string(), inst.param);
+	} while (vm.execute() == VM::SUCCESS);*/
 
 	return 0;
 }

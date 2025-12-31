@@ -82,6 +82,7 @@ static constexpr struct
 {
 	{ Token::VAR,     "var" },
 	{ Token::FOREVER, "forever" },
+	{ Token::REPEAT,  "repeat" },
 };
 
 Token Tokenizer::parse_identifier()
@@ -99,6 +100,7 @@ Token Tokenizer::parse_identifier()
 	
 	t.end = m_idx;
 
+	// Reassign type if it is a keyword
 	const auto equals = [&](const char* name)
 	{
 		char buf[128] = {};
@@ -131,7 +133,7 @@ Token Tokenizer::parse_string()
 	{
 		if (!peek())
 		{
-			errorln("error: on line %llu: expected `'` to close string literal", m_line);
+			errorln("Error: On line %llu: Expected `'` to close string literal", m_line);
 		}
 	}
 
@@ -157,7 +159,7 @@ Token Tokenizer::parse_number()
 		if (!is_number(peek(1))) 
 		{
 			// TODO: Better diagnostics, something like "unexpected `.` near <token>""
-			errorln("error: on line %llu: unexpected `.`", m_line);
+			errorln("Error: On line %llu: Unexpected `.`", m_line);
 		}
 	}
 
@@ -173,7 +175,7 @@ Token Tokenizer::parse_number()
 			}
 			else
 			{
-				errorln("error: on line %llu: unexpected `.` in number literal", m_line);
+				errorln("Error: On line %llu: Unexpected `.` in number literal", m_line);
 			}
 		} 
 
