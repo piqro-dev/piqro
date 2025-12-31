@@ -1,11 +1,76 @@
+#include <base/log.h>
 
+#include <lang/tokenizer.h>
 
-#if defined BUILD_UI
-	#include <web/index.cpp>
+#include <lang/generator.h>
 
-	#include <block/vm.cpp>
+#include <lang/vm.h>
 
-	#include <block/block.cpp>
+static constexpr char src[] = 
+R"(
 
-	#include <block/generator.cpp>
+var f = 67.0
+var g = f
+g = 10
+)";
+
+int main() 
+{
+	Tokenizer tok(src);
+
+	static Array <Token, 1024> tokens;
+	tok.tokenize(tokens);
+
+	println("\nTokens:");
+
+	for (const Token& t : tokens)
+	{
+		char buf[128] = {};
+		t.value(src, buf, 128);
+		
+		println("\t%s, %s", t.as_string(), buf);
+	}
+
+	Generator gen(src, tokens.begin(), tokens.count());
+
+	static Array <Instruction, 2048> instructions;
+	gen.emit_program(instructions);
+
+	gen.dump_immediates();
+	gen.dump_variables();
+
+	println("\nProgram:");
+
+	for (const Instruction& it : instructions)
+	{
+		println("\t%s, %d", it.as_string(), it.param);
+	}
+
+	VM vm(instructions.begin(), instructions.count(), gen.immediates().begin(), gen.immediates().count());
+
+	println("\nExecution:");
+
+	do 
+	{
+		vm.dump_stack();
+
+		const Instruction& inst = vm.current_instruction();
+
+		println("\n-> %s, %d\n", inst.as_string(), inst.param);
+	} while (vm.execute() == VM::SUCCESS);
+
+	return 0;
+}
+
+#if defined _WIN32
+	extern "C" void mainCRTStartup()
+	{
+		ExitProcess(main());
+	}
 #endif
+
+#include <lang/tokenizer.cpp>
+
+#include <lang/generator.cpp>
+
+#include <lang/vm.cpp>

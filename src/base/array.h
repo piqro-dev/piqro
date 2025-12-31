@@ -6,49 +6,44 @@ template <typename T, size_t N>
 struct Array
 {
 public:
-	inline void init()
-	{
-		m_count = 0;
-	}
+	constexpr inline Array()
+		: m_count(0) {}
 
 	inline T& push(const T& v = {})
 	{
-		ASSERT(m_count < N);
-		return m_data[m_count++] = v;
+		return m_buffer[m_count++] = v;
 	}
 
 	template <typename ... Args>
 	inline T& emplace(const Args& ... args)
 	{
-		ASSERT(m_count < N);
-		return m_data[m_count++] = T(args...);
+		return m_buffer[m_count++] = T(args...);
 	}
 
 	inline T& pop()
 	{
-		return m_data[--m_count];
+		return m_buffer[--m_count];
 	}
 
 	inline T* begin()
 	{
-		return m_data;	
+		return m_buffer;	
 	}
 
 	inline T* end()
 	{
-		return m_data + m_count;
+		return m_buffer + m_count;
 	}	
 
 	inline T* begin() const
 	{
-		return m_data;	
+		return m_buffer;	
 	}
 
 	inline T* end() const
 	{
-		return m_data + m_count;
+		return m_buffer + m_count;
 	}	
-
 
 	inline void trim_end(size_t from)
 	{
@@ -57,7 +52,7 @@ public:
 
 	inline T& remove(size_t at)
 	{
-		return m_data[at] = pop();
+		return m_buffer[at] = pop();
 	}
 
 	inline size_t count()
@@ -67,10 +62,10 @@ public:
 
 	inline T& operator[](size_t idx)
 	{
-		return m_data[idx];
+		return m_buffer[idx];
 	}
 
 private:
-	T m_data[N];
+	T m_buffer[N];
 	size_t m_count;
 };

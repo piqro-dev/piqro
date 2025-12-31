@@ -35,10 +35,10 @@ async function run() {
 	const wasm = await WebAssembly.instantiateStreaming(fetch('index.wasm'), {
 		env: {
 			// libc
-			strlen(str) {
+			strlen(s) {
 				let len = 0;
 				
-				while (memory[str + len] !== 0) {
+				while (memory[s + len] !== 0) {
 					len++;
 				}
 			
@@ -47,9 +47,9 @@ async function run() {
 			strcmp(l, r) {
 				return decode(l).localeCompare(decode(r));
 			},
-			memcmp(l, r, s) {
-				const lBuf = new Uint8Array(memory.buffer, l, s);
-				const rBuf = new Uint8Array(memory.buffer, r, s);
+			memcmp(l, r, len) {
+				const lBuf = new Uint8Array(memory.buffer, l, len);
+				const rBuf = new Uint8Array(memory.buffer, r, len);
 
 				return indexedDB.cmp(lBuf, rBuf);
 			},
@@ -83,7 +83,7 @@ async function run() {
 
 				return last;
 			},
-			atoi(x) { 
+			atof(x) { 
 				return Number(decode(x)); 
 			},
 			sinf: Math.sin,

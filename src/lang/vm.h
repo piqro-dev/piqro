@@ -4,9 +4,9 @@
 
 #include <base/array.h>
 
-#include <block/instruction.h>
+#include <lang/instruction.h>
 
-#include <block/value.h>
+#include <lang/value.h>
 
 struct CallFrame
 {
@@ -33,7 +33,7 @@ public:
 	};
 
 public:
-	void init(Instruction* instructions, uint16_t instruction_count, Value* immediates, uint16_t immediate_count);
+	VM(Instruction* instructions, uint16_t instruction_count, Value* immediates, uint16_t immediate_count);
 
 	void dump_stack();
 

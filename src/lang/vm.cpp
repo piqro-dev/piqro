@@ -1,19 +1,7 @@
-#include <block/vm.h>
+#include <lang/vm.h>
 
-void VM::init(Instruction* instructions, uint16_t instruction_count, Value* immediates, uint16_t immediate_count)
-{
-	m_instructions = instructions;
-	m_instruction_count = instruction_count;
-
-	m_immediates = immediates;
-	m_immediate_count = immediate_count;
-
-	m_locals.init();
-	m_stack.init();
-	m_call_frames.init();
-
-	m_ic = 0;
-}
+VM::VM(Instruction* instructions, uint16_t instruction_count, Value* immediates, uint16_t immediate_count)
+	: m_instructions(instructions), m_instruction_count(instruction_count), m_immediates(immediates), m_immediate_count(immediate_count), m_ic(0) {}
 
 void VM::dump_stack()
 {
@@ -151,7 +139,7 @@ VM::Trap VM::execute()
 
 		case Instruction::NOOP:
 		{
-
+			// ... do nothing
 		} break;
 
 		default:

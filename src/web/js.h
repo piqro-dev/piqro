@@ -33,8 +33,6 @@ static inline void store_ref(RefHandle h, Ref r)
 extern "C"
 {
 
-int32_t atoi(const char*);
-
 //
 // types
 //
@@ -101,8 +99,6 @@ void set_attribute(Ref, const char*, const char*);
 
 Ref get_computed_style(Ref);
 
-float parse_float(const char*);
-
 //
 // canvas 
 //
@@ -116,5 +112,16 @@ void fill_text(Ref, const char*, float, float);
 void clear_rect(Ref, float, float, float, float);
 
 };
+
+}
+
+//
+// libc
+//
+
+extern "C"
+{
+
+double atof(const char*);
 
 }

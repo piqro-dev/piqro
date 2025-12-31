@@ -25,7 +25,8 @@
 	INST(RET) \
 	INST(JUMP) \
 	INST(JUMP_COND) \
-	INST(NOOP)
+	INST(NOOP) \
+	INST(HALT)
 
 #define INST(name) name,
 

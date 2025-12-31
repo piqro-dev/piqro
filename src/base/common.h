@@ -1,6 +1,22 @@
 #pragma once
 
+// 
+// system libraries
+//
+
 #include <stdint.h>
+
+//
+// system includes
+//
+
+#if !defined __wasm__
+	#include <stdlib.h>
+#endif
+
+#if defined _WIN32
+	#include <windows.h>
+#endif
 
 //
 // common includes
@@ -22,7 +38,7 @@ using vec4 = float __attribute__((ext_vector_type(4)));
 // common macros
 //
 
-#define ASSERT(expr) do { if (!(expr)) { errorln("Assertion failed: %s, in file: %s, line: %d", #expr, __FILE__, __LINE__); __builtin_trap(); } } while (0) 
+#define ASSERT(expr) do { if (!(expr)) { errorln("Assertion failed: %s, in file %s, on line %d", #expr, __FILE__, __LINE__); __builtin_trap(); } } while (0) 
 
 #define DO_ONCE for (static bool once = false; !once; once = true)
 
