@@ -9,9 +9,14 @@ public:
 	constexpr inline Array()
 		: m_count(0) {}
 
-	inline T& push(const T& v = {})
+	inline T& push(const T& v)
 	{
 		return m_buffer[m_count++] = v;
+	}
+
+	inline T& push()
+	{
+		return m_buffer[m_count++];
 	}
 
 	template <typename ... Args>

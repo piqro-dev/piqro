@@ -143,7 +143,7 @@ static inline Value operator< (const Value& l, const Value& r)
 
 static inline Value operator> (const Value& l, const Value& r)
 {
-	return (l.as_number() == r.as_number());
+	return (l.as_number() > r.as_number());
 }
 
 static inline Value operator<= (const Value& l, const Value& r)
@@ -153,7 +153,7 @@ static inline Value operator<= (const Value& l, const Value& r)
 
 static inline Value operator>= (const Value& l, const Value& r)
 {
-	return (l.as_number() == r.as_number());
+	return (l.as_number() >= r.as_number());
 }
 
 static inline Value operator! (const Value& v)

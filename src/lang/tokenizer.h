@@ -11,7 +11,7 @@
 struct Tokenizer
 {
 public:
-	Tokenizer(const char* src);
+	void init(const char* src);
 
 	template <size_t N>
 	void tokenize(Array <Token, N>& tokens);

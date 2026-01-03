@@ -6,16 +6,20 @@
 	TOKEN(STRING_LIT,  "string literal") \
 	TOKEN(NUMBER_LIT,  "number literal") \
 	TOKEN(IDENTIFIER,  "identifier") \
+	TOKEN(TRUE,        "`true`") \
+	TOKEN(FALSE,       "`false`") \
 	\
 	TOKEN(VAR,         "keyword `var`") \
 	TOKEN(FOREVER,     "keyword `forever`") \
 	TOKEN(REPEAT,      "keyword `repeat`") \
+	TOKEN(DEFINE,      "keyword `define`") \
 	\
 	TOKEN(EQUALS,      "`=`") \
 	TOKEN(OPEN_CURLY,  "`{`") \
 	TOKEN(CLOSE_CURLY, "`}`") \
 	TOKEN(OPEN_BRACE,  "`(`") \
-	TOKEN(CLOSE_BRACE, "`)`")
+	TOKEN(CLOSE_BRACE, "`)`") \
+	TOKEN(COMMA, "`,`")
 
 #define TOKEN(name, fancy_name) name,
 

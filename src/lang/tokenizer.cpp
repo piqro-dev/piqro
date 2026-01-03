@@ -1,7 +1,10 @@
 #include <lang/tokenizer.h>
 
-Tokenizer::Tokenizer(const char* src)
-	: m_src(src), m_idx(0) {}
+void Tokenizer::init(const char* src)
+{
+	m_src = src;
+	m_idx = 0;
+}
 
 template <size_t N>
 void Tokenizer::tokenize(Array <Token, N>& tokens)
@@ -20,6 +23,12 @@ void Tokenizer::tokenize(Array <Token, N>& tokens)
 			case '\t':
 			case ' ':
 			{
+				eat();
+			} break;
+
+			case '=':
+			{
+				tokens.emplace(Token::EQUALS, m_idx, m_idx + 1);	
 				eat();
 			} break;
 
@@ -47,9 +56,9 @@ void Tokenizer::tokenize(Array <Token, N>& tokens)
 				eat();
 			} break;
 
-			case '=':
+			case ',':
 			{
-				tokens.emplace(Token::EQUALS, m_idx, m_idx + 1);	
+				tokens.emplace(Token::COMMA, m_idx, m_idx + 1);		
 				eat();
 			} break;
 
@@ -60,7 +69,7 @@ void Tokenizer::tokenize(Array <Token, N>& tokens)
 
 			default:
 			{
-				if (is_alpha(peek()))
+				if (is_alpha(peek()) || peek() == '_')
 				{
 					tokens.push(parse_identifier());
 				}
@@ -83,6 +92,10 @@ static constexpr struct
 	{ Token::VAR,     "var" },
 	{ Token::FOREVER, "forever" },
 	{ Token::REPEAT,  "repeat" },
+	{ Token::DEFINE,  "define" },
+	
+	{ Token::TRUE,    "true" },
+	{ Token::FALSE,   "false" },
 };
 
 Token Tokenizer::parse_identifier()
@@ -93,7 +106,7 @@ Token Tokenizer::parse_identifier()
 
 	eat();
 	
-	while (is_alnum(peek())) 
+	while (is_alnum(peek()) || peek() == '_') 
 	{ 
 		eat(); 
 	}

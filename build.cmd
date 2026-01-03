@@ -16,8 +16,7 @@ set common_flags=-std=gnu++2c ^
 	-Wno-c99-designator ^
 	-Wno-undefined-internal ^
 	-Wno-nan-infinity-disabled ^
-	-nostdlib ^
-	-O3
+	-nostdlib
 
 set wasm_flags=%common_flags% ^
 	--target=wasm32 ^
@@ -28,7 +27,7 @@ set wasm_flags=%common_flags% ^
 set win32_flags=%common_flags% ^
 	-Xlinker -subsystem:console ^
 	-fuse-ld=lld ^
-	-flto
+	-O3 -ftime-trace
 
 set win32_libs= ^
 	-lmsvcrt ^

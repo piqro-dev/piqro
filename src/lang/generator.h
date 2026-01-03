@@ -2,17 +2,9 @@
 
 #include <base/common.h>
 
-#include <base/array.h>
-
 #include <lang/value.h>
 
 #include <lang/instruction.h>
-
-struct Variable
-{
-	char name[256];
-	uint16_t idx;
-};
 
 struct Scope
 {
@@ -20,23 +12,55 @@ struct Scope
 	uint16_t local_base;
 };
 
+struct Procedure
+{
+	char name[64];
+	uint8_t param_count;
+	uint16_t first_inst;
+	uint16_t last_inst;
+};
+
+struct NativeProcedure
+{
+	char name[64];
+	uint8_t param_count;
+	void (*callback)();
+};
+
+static constexpr uint16_t MAX_IDENTIFIER_NAME_LENGTH = 128;
+static constexpr uint16_t MAX_IMMEDIATES = 128;
+static constexpr uint16_t MAX_VARIABLES = 128;
+static constexpr uint16_t MAX_PROCEDURES = 64;
+static constexpr uint16_t MAX_SCOPES = 32;
+
+using Identifier = char[MAX_IDENTIFIER_NAME_LENGTH];
+
 struct Generator
 {
 public:
-	static constexpr uint16_t MAX_IMMEDIATES = 256;
-
-	static constexpr uint16_t MAX_VARIABLES = 512;
-
-	static constexpr uint16_t MAX_SCOPES = 16;
 
 public:
-	Generator(const char* source_code, const Token* tokens, uint16_t token_count);
-
-	void dump_immediates();
-
-	void dump_variables();
+	void init(const char* source_code, const Token* tokens, uint16_t token_count);
 	
 	Array <Value, MAX_IMMEDIATES>& immediates();
+
+	Array <Identifier, MAX_VARIABLES>& variables();
+
+	template <size_t N>
+	void emit_program(Array <Instruction, N>& instructions);
+
+private:
+	Token peek(int16_t offset = 0);
+
+	Token eat();
+
+	Token try_eat(Token::TokenType expected);
+
+	Procedure& get_or_create_procedure(const char* name);
+
+	uint16_t get_or_create_variable(const char* name);
+
+	uint16_t get_or_create_immediate(const Value& v);
 
 	//
 	// Expressions
@@ -47,6 +71,9 @@ public:
 
 	template <size_t N>
 	void emit_identifier_expression(Array <Instruction, N>& instructions);
+
+	template <size_t N>
+	void emit_boolean_expression(Array <Instruction, N>& instructions);
 
 	template <size_t N>
 	void emit_expression(Array <Instruction, N>& instructions);
@@ -65,6 +92,12 @@ public:
 	void emit_repeat_statement(Array <Instruction, N>& instructions);
 
 	template <size_t N>
+	void emit_define_statement(Array <Instruction, N>& instructions);
+
+	template <size_t N>
+	void emit_procedure_statement(Array <Instruction, N>& instructions);
+
+	template <size_t N>
 	void emit_statement(Array <Instruction, N>& instructions);
 
 	//
@@ -72,25 +105,7 @@ public:
 	//
 
 	template <size_t N>
-	void emit_scope(Array <Instruction, N>& instructions);
-
-	//
-	// Program
-	//
-
-	template <size_t N>
-	void emit_program(Array <Instruction, N>& instructions);
-
-private:
-	Token peek(int16_t offset = 0);
-
-	Token eat();
-
-	bool variable_exists(const char* name);
-
-	Variable& get_or_create_variable(const char* name);
-
-	Value& get_or_create_immediate(const Value& v, uint16_t& idx);
+	Scope emit_scope(Array <Instruction, N>& instructions);
 
 private:
 	const char* m_source_code;
@@ -98,9 +113,11 @@ private:
 	uint16_t m_token_count;
 
 	Array <Value, MAX_IMMEDIATES> m_immediates;
-	Array <Variable, MAX_VARIABLES> m_variables;
-	Array <Variable, MAX_VARIABLES> m_locals;
+	Array <Identifier, MAX_VARIABLES> m_variables;
 	Array <Scope, MAX_SCOPES> m_scopes;
+	Array <Procedure, MAX_PROCEDURES> m_procedures;
+
+	bool m_in_procedure;
 
 	uint16_t m_idx;
 };

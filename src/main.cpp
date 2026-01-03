@@ -8,14 +8,18 @@
 
 static constexpr char src[] = 
 R"(
-repeat 50 {
-	var a = 10
+define hello(x, y) {
+	
 }
+
+hello(10, 10)
+
 )";
 
 int main() 
 {
-	Tokenizer tok(src);
+	Tokenizer tok;
+	tok.init(src);
 
 	Array <Token, 1024> tokens;
 	tok.tokenize(tokens);
@@ -37,32 +41,41 @@ int main()
 		}
 	}
 
-	Generator gen(src, tokens.begin(), tokens.count());
+	Generator gen;
+	gen.init(src, tokens.begin(), tokens.count());
 
 	Array <Instruction, 2048> instructions;
 	gen.emit_program(instructions);
 
-	gen.dump_immediates();
-	gen.dump_variables();
-
 	println("\nProgram:");
 
-	for (const Instruction& it : instructions)
+	for (size_t i = 0; i < instructions.count(); i++)
 	{
-		println("\t%-20s %hu", it.as_string(), it.param);
+		const Instruction& it = instructions[i];
+
+		if (it.type == Instruction::LOAD_IMMEDIATE)
+		{
+			char buf[128] = {};
+			gen.immediates()[it.param].as_string(buf, 128);
+
+			println("[%zu]\t%-20s %hu (%s)", i, it.as_string(), it.param, buf);
+		}
+		else if (it.type == Instruction::LOAD_LOCAL || it.type == Instruction::STORE_LOCAL)
+		{
+			println("[%zu]\t%-20s %hu (%s)", i, it.as_string(), it.param, gen.variables()[it.param]);
+		}
+		else
+		{
+			println("[%zu]\t%-20s %hu", i, it.as_string(), it.param);
+		}
 	}
-/*
-	VM vm(instructions.begin(), instructions.count(), gen.immediates().begin(), gen.immediates().count());
+
+	/*VM vm(instructions.begin(), instructions.count(), gen.immediates().begin(), gen.immediates().count());
 
 	println("\nExecution:");
 
 	do 
 	{
-		vm.dump_stack();
-
-		const Instruction& inst = vm.current_instruction();
-
-		println("\n-> %s, %hu\n", inst.as_string(), inst.param);
 	} while (vm.execute() == VM::SUCCESS);*/
 
 	return 0;
@@ -71,12 +84,10 @@ int main()
 #if defined _WIN32
 	extern "C" void mainCRTStartup()
 	{
-		ExitProcess(main());
+		exit(main());
 	}
 #endif
 
 #include <lang/tokenizer.cpp>
 
 #include <lang/generator.cpp>
-
-#include <lang/vm.cpp>

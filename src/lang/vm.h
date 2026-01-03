@@ -33,7 +33,7 @@ public:
 	};
 
 public:
-	VM(Instruction* instructions, uint16_t instruction_count, Value* immediates, uint16_t immediate_count);
+	void init(Instruction* instructions, uint16_t instruction_count, Value* immediates, uint16_t immediate_count);
 
 	void dump_stack();
 
@@ -58,11 +58,9 @@ public:
 private:
 	Trap LOAD_IMMEDIATE(uint16_t idx);
 
-	Trap LOAD_VAR(uint16_t idx);
-
-	Trap STORE_VAR(uint16_t idx);
-
 	Trap LOAD_LOCAL(uint16_t idx);
+
+	Trap STORE_LOCAL(uint16_t idx);
 
 	Trap LOAD_PROC(uint16_t idx);
 

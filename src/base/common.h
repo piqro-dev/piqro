@@ -12,10 +12,7 @@
 
 #if !defined __wasm__
 	#include <stdlib.h>
-#endif
-
-#if defined _WIN32
-	#include <windows.h>
+	#include <stdio.h>
 #endif
 
 //
