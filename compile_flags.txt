@@ -1,5 +1,0 @@
--std=gnu++2c
--Wno-c99-designator
--Isrc 
---target=wasm32
--xc++

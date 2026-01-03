@@ -4,9 +4,13 @@
 
 #include <base/array.h>
 
+#include <base/arena.h>
+
 #include <lang/instruction.h>
 
 #include <lang/value.h>
+
+#include <lang/config.h>
 
 struct CallFrame
 {
@@ -16,100 +20,29 @@ struct CallFrame
 	uint16_t local_base;
 };
 
+enum Trap : uint8_t
+{
+	TRAP_SUCCESS,
+	TRAP_STACK_OVERFLOW,
+	TRAP_STACK_UNDERFLOW,
+	TRAP_OUT_OF_BOUNDS,
+	TRAP_ILLEGAL_INSTRUCTION,
+};
+
 struct VM
 {
-public:
-	static constexpr uint16_t MAX_STACK_SIZE = 128;
+	Array <Instruction> instructions;
+	Array <Value> immediates;
 
-	static constexpr uint16_t MAX_VARIABLES = 64;
+	Value variables[MAX_VARIABLES];
 
-	enum Trap
-	{
-		SUCCESS,
-		STACK_OVERFLOW,
-		STACK_UNDERFLOW,
-		OUT_OF_BOUNDS,
-		ILLEGAL_INSTRUCTION,
-	};
+	Array <Value> locals;
+	Array <Value> stack;
+	Array <CallFrame> call_frames;
 
-public:
-	void init(Instruction* instructions, uint16_t instruction_count, Value* immediates, uint16_t immediate_count);
-
-	void dump_stack();
-
-	void dump_instructions();
-
-	Trap execute();
-
-	Instruction current_instruction();
-
-	bool is_done();
-
-	bool check_stack_overflow();
-
-	bool check_stack_underflow();
-
-	uint16_t ic();
-
-	Array <Value, MAX_STACK_SIZE>& stack();
-
-	Array <CallFrame, MAX_STACK_SIZE>& call_frames();
-
-private:
-	Trap LOAD_IMMEDIATE(uint16_t idx);
-
-	Trap LOAD_LOCAL(uint16_t idx);
-
-	Trap STORE_LOCAL(uint16_t idx);
-
-	Trap LOAD_PROC(uint16_t idx);
-
-	Trap LOAD_NULL();
-
-	Trap ADD();
-
-	Trap SUB();
-
-	Trap DIV();
-
-	Trap MUL();
-
-	Trap AND();
-
-	Trap OR();
-
-	Trap GREATER_THAN();
-
-	Trap LESS_THAN();
-
-	Trap EQUALS();
-
-	Trap GREATER();
-
-	Trap LESS();
-
-	Trap NOT();
-
-	Trap CALL(uint16_t arg_count);
-
-	Trap RET();
-
-	Trap JUMP(uint16_t to);
-
-	Trap JUMP_COND(uint16_t to);
-
-private:
-	Instruction* m_instructions;
-	uint16_t m_instruction_count;
-
-	Value* m_immediates;
-	uint16_t m_immediate_count;
-
-	Value m_variables[MAX_VARIABLES];
-
-	Array <Value, MAX_VARIABLES> m_locals;
-	Array <Value, MAX_STACK_SIZE> m_stack;
-	Array <CallFrame, MAX_STACK_SIZE> m_call_frames;
-
-	uint16_t m_ic;
+	uint16_t ic;
 };
+
+static inline void init(VM* vm, Arena* arena, Array <Instruction> instructions, Array <Value> immediates);
+
+static inline Trap execute(VM* vm);

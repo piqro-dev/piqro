@@ -1,123 +1,74 @@
 #include <lang/tokenizer.h>
 
-void Tokenizer::init(const char* src)
+#include <lang/tokenizer.h>
+
+static inline char peek_char(const Tokenizer* tok, int16_t offset = 0) 
 {
-	m_src = src;
-	m_idx = 0;
+	if (tok->ptr + offset > __builtin_strlen(tok->source)) 
+	{
+		return 0;
+	}
+
+	return tok->source[tok->ptr + offset];
 }
 
-template <size_t N>
-void Tokenizer::tokenize(Array <Token, N>& tokens)
+static inline char eat_char(Tokenizer* tok)
 {
-	const size_t src_len = __builtin_strlen(m_src);
+	return tok->source[tok->ptr++];
+}
 
-	while (m_idx < src_len)
-	{
-		switch (peek()) 
-		{
-			case '\n':
-			{
-				m_line++;	
-			}
-			case '\r':
-			case '\t':
-			case ' ':
-			{
-				eat();
-			} break;
+__attribute__((format(printf, 2, 3)))
+static inline void error(const Tokenizer* tok, const char* fmt, ...)
+{
+	__builtin_va_list args;
 
-			case '=':
-			{
-				tokens.emplace(Token::EQUALS, m_idx, m_idx + 1);	
-				eat();
-			} break;
+	char out[2048];
 
-			case '{':
-			{
-				tokens.emplace(Token::OPEN_CURLY, m_idx, m_idx + 1);
-				eat();
-			} break;
+	__builtin_va_start(args, fmt);
+	__builtin_vsprintf(out, fmt, args);
+	__builtin_va_end(args);
 
-			case '}':
-			{
-				tokens.emplace(Token::CLOSE_CURLY, m_idx, m_idx + 1);
-				eat();
-			} break;
-
-			case '(':
-			{
-				tokens.emplace(Token::OPEN_BRACE, m_idx, m_idx + 1);
-				eat();
-			} break;
-
-			case ')':
-			{
-				tokens.emplace(Token::CLOSE_BRACE, m_idx, m_idx + 1);		
-				eat();
-			} break;
-
-			case ',':
-			{
-				tokens.emplace(Token::COMMA, m_idx, m_idx + 1);		
-				eat();
-			} break;
-
-			case '\'':
-			{
-				tokens.emplace(parse_string());
-			} break;
-
-			default:
-			{
-				if (is_alpha(peek()) || peek() == '_')
-				{
-					tokens.push(parse_identifier());
-				}
-				// Allow the first character to be the decimal point (so numbers like .321 are allowed)
-				else if (is_number(peek()) || peek() == '.') 
-				{
-					tokens.push(parse_number());
-				}
-			} break;
-		}
-	}
+	errorln("Error: line %d: %s", tok->line, out);
 }
 
 static constexpr struct 
 {
-	Token::TokenType type;
+	TokenType type;
 	const char*	name;
 } KEYWORDS[] =
 {
-	{ Token::VAR,     "var" },
-	{ Token::FOREVER, "forever" },
-	{ Token::REPEAT,  "repeat" },
-	{ Token::DEFINE,  "define" },
+	{ TOKEN_VAR,     "var" },
+	{ TOKEN_FOREVER, "forever" },
+	{ TOKEN_REPEAT,  "repeat" },
+	{ TOKEN_DEFINE,  "define" },
+	{ TOKEN_RETURN,  "return" },
 	
-	{ Token::TRUE,    "true" },
-	{ Token::FALSE,   "false" },
+	{ TOKEN_TRUE,    "true" },
+	{ TOKEN_FALSE,   "false" },
 };
 
-Token Tokenizer::parse_identifier()
+static inline Token parse_identifier(Tokenizer* tok)
 {
-	Token t = { Token::IDENTIFIER };
+	Token t = {};
 	
-	t.start = m_idx;
+	t.type = TOKEN_IDENTIFIER;
+	t.start = tok->ptr;
+	t.line = tok->line;
 
-	eat();
+	eat_char(tok);
 	
-	while (is_alnum(peek()) || peek() == '_') 
+	while (is_alnum(peek_char(tok)) || peek_char(tok) == '_') 
 	{ 
-		eat(); 
+		eat_char(tok); 
 	}
 	
-	t.end = m_idx;
+	t.end = tok->ptr;
 
 	// Reassign type if it is a keyword
 	const auto equals = [&](const char* name)
 	{
 		char buf[128] = {};
-		__builtin_snprintf(buf, t.end - t.start + 1, "%s", m_src + t.start);
+		as_string(t, tok->source, buf, 128);
 
 		return __builtin_strcmp(buf, name) == 0;
 	};
@@ -134,53 +85,34 @@ Token Tokenizer::parse_identifier()
 	return t;
 }
 
-Token Tokenizer::parse_string()
+static inline Token parse_number(Tokenizer* tok)
 {
-	Token t = { Token::STRING_LIT };
+	Token t = {};
 
-	t.start = m_idx;
-
-	eat();
-
-	while (eat() != '\'')
-	{
-		if (!peek())
-		{
-			errorln("Error: On line %llu: Expected `'` to close string literal", m_line);
-		}
-	}
-
-	t.end = m_idx;
-
-	return t;
-}
-
-Token Tokenizer::parse_number()
-{
-	Token t = { Token::NUMBER_LIT };
-
-	t.start = m_idx;
+	t.type = TOKEN_NUMBER;
+	t.start = tok->ptr;
+	t.line = tok->line;
 
 	bool decimal = false;
 
 	// First character may be the decimal point
-	if (peek() == '.')
+	if (peek_char(tok) == '.')
 	{
 		decimal = true;
 
 		// Bail out early if the next character isn't a number
-		if (!is_number(peek(1))) 
+		if (!is_number(peek_char(tok, 1))) 
 		{
 			// TODO: Better diagnostics, something like "unexpected `.` near <token>""
-			errorln("Error: On line %llu: Unexpected `.`", m_line);
+			error(tok, "Unexpected `.`");
 		}
 	}
 
-	eat();
+	eat_char(tok);
 
-	while (is_number(peek()) || peek() == '.')
+	while (is_number(peek_char(tok)) || peek_char(tok) == '.')
 	{ 
-		if (peek() == '.')
+		if (peek_char(tok) == '.')
 		{
 			if (!decimal)
 			{
@@ -188,29 +120,148 @@ Token Tokenizer::parse_number()
 			}
 			else
 			{
-				errorln("Error: On line %llu: Unexpected `.` in number literal", m_line);
+				error(tok, "Unexpected `.` in number literal");
 			}
 		} 
 
-		eat();
+		eat_char(tok);
 	}
 	
-	t.end = m_idx;
+	t.end = tok->ptr;
 
 	return t;
 }
 
-char Tokenizer::peek(uint64_t offset)
+static inline Token parse_string(Tokenizer* tok)
 {
-	if (m_idx + offset > __builtin_strlen(m_src)) 
+	Token t = {};
+
+	t.type = TOKEN_STRING;
+	t.start = tok->ptr;
+	t.line = tok->line;
+	
+	eat_char(tok);
+
+	while (eat_char(tok) != '\'')
 	{
-		return 0;
+		if (!peek_char(tok))
+		{
+			error(tok, "Expected `'` to close string literal");
+		}
 	}
 
-	return m_src[m_idx + offset];
+	t.end = tok->ptr;
+
+	return t;
 }
 
-char Tokenizer::eat()
+static inline void init(Tokenizer* tok, const char* source)
 {
-	return m_src[m_idx++];
+	tok->source = source;
+	tok->line = 1;
+	tok->ptr = 0;
+}
+
+static inline void tokenize(Tokenizer* tok, Array <Token>* out)
+{
+	const size_t source_length = __builtin_strlen(tok->source);
+
+	while (tok->ptr < source_length)
+	{
+		switch (peek_char(tok))
+		{
+			case '\n':
+			{
+				tok->line++;
+			} 
+			case '\r':
+			case '\t':
+			case ' ':
+			{
+				eat_char(tok);
+			} break;
+
+			case '+':
+			{
+				emplace(out, TOKEN_PLUS, tok->line, tok->ptr, tok->ptr + 1);	
+				eat_char(tok);
+			} break;
+
+			case '-':
+			{
+				emplace(out, TOKEN_DASH, tok->line, tok->ptr, tok->ptr + 1);	
+				eat_char(tok);
+			} break;
+
+			case '*':
+			{
+				emplace(out, TOKEN_STAR, tok->line, tok->ptr, tok->ptr + 1);	
+				eat_char(tok);
+			} break;
+
+			case '/':
+			{
+				emplace(out, TOKEN_SLASH, tok->line, tok->ptr, tok->ptr + 1);	
+				eat_char(tok);
+			} break;
+
+			case '=':
+			{
+				emplace(out, TOKEN_EQUALS, tok->line, tok->ptr, tok->ptr + 1);	
+				eat_char(tok);
+			} break;
+
+			case '{':
+			{
+				emplace(out, TOKEN_OPEN_CURLY, tok->line, tok->ptr, tok->ptr + 1);
+				eat_char(tok);
+			} break;
+
+			case '}':
+			{
+				emplace(out, TOKEN_CLOSE_CURLY, tok->line, tok->ptr, tok->ptr + 1);
+				eat_char(tok);
+			} break;
+
+			case '(':
+			{
+				emplace(out, TOKEN_OPEN_BRACE, tok->line, tok->ptr, tok->ptr + 1);
+				eat_char(tok);
+			} break;
+
+			case ')':
+			{
+				emplace(out, TOKEN_CLOSE_BRACE, tok->line, tok->ptr, tok->ptr + 1);		
+				eat_char(tok);
+			} break;
+
+			case ',':
+			{
+				emplace(out, TOKEN_COMMA, tok->line, tok->ptr, tok->ptr + 1);		
+				eat_char(tok);
+			} break;
+
+			case '\'':
+			{
+				emplace(out, parse_string(tok));
+			} break;
+
+			default:
+			{
+				if (is_alpha(peek_char(tok)) || peek_char(tok) == '_')
+				{
+					emplace(out, parse_identifier(tok));
+				}
+				// Allow the first character to be the decimal point (so numbers like .321 are allowed)
+				else if (is_number(peek_char(tok)) || peek_char(tok) == '.') 
+				{
+					emplace(out, parse_number(tok));
+				}
+				else
+				{
+					error(tok, "Encountered bad token");
+				}
+			} break;
+		}
+	}
 }

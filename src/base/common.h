@@ -22,16 +22,6 @@
 #include <base/log.h>
 
 //
-// Common types
-//
-
-using uvec2 = uint32_t __attribute__((ext_vector_type(2)));
-using ivec2 = uint32_t __attribute__((ext_vector_type(2)));
-
-using vec2 = float __attribute__((ext_vector_type(2)));
-using vec4 = float __attribute__((ext_vector_type(4)));
-
-//
 // Common macros
 //
 

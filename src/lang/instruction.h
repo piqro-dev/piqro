@@ -27,33 +27,29 @@
 	INST(NOOP) \
 	INST(HALT)
 
-#define INST(name) name,
+#undef INST
+#define INST(name) INSTRUCTION_##name,
+
+enum InstructionType : uint8_t
+{
+	DEFINE_INSTRUCTIONS
+};
 
 struct Instruction
 {
-	enum InstructionType : uint8_t
-	{
-		DEFINE_INSTRUCTIONS
-	};
-
-	inline Instruction() = default;
-
-	inline Instruction(InstructionType type, uint16_t param = 0)
-		: type(type), param(param) {}
-
-	#undef INST
-	#define INST(name) case name: return #name;
-
-	inline const char* as_string() const
-	{
-		switch (this->type)
-		{
-			DEFINE_INSTRUCTIONS
-		}
-
-		return "Unknown";
-	}
-
 	InstructionType type;
 	uint16_t param;
 };
+
+#undef INST
+#define INST(name) case INSTRUCTION_##name: return #name;
+
+static inline const char* to_string(const InstructionType type)
+{
+	switch (type)
+	{
+		DEFINE_INSTRUCTIONS
+	}
+	
+	return "unknown";
+}

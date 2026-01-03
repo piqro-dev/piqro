@@ -1,260 +1,68 @@
 #include <lang/vm.h>
 
-void VM::init(Instruction* instructions, uint16_t instruction_count, Value* immediates, uint16_t immediate_count)
-{
-	m_instructions = instructions;
-	m_instruction_count = instruction_count;
-	m_immediates = immediates;
-	m_immediate_count = immediate_count;
-	m_ic = 0;
-}
-
-void VM::dump_stack()
-{
-	println("Stack dump:");
-
-	if (m_stack.count() > 0)
-	{
-		for (uint16_t i = 0; i < m_stack.count(); i++)
-		{
-			char v[64] = {};
-	
-			m_stack[i].as_string(v, 64);
-	
-			println("\t%s", v);
-		}
+#define VERIFY_STACK_OVERFLOW() \
+	if (vm->stack.count >= MAX_STACK_SIZE) \
+	{ \
+		return TRAP_STACK_OVERFLOW; \
 	}
-	else
-	{
-		println("\t(empty)");
-	}
-}
-
-VM::Trap VM::execute()
-{
-	Trap r = SUCCESS;
-
-	const Instruction& inst = m_instructions[m_ic];
-
-	switch (inst.type) 
-	{
-		case Instruction::LOAD_IMMEDIATE:
-		{
-			r = LOAD_IMMEDIATE(inst.param);
-		} break;
-	
-		case Instruction::LOAD_LOCAL:
-		{
-			r = LOAD_LOCAL(inst.param);	
-		} break;
-	
-		case Instruction::STORE_LOCAL:
-		{
-			r = STORE_LOCAL(inst.param);	
-		} break;
-	
-		case Instruction::LOAD_NULL:
-		{
-			r = LOAD_NULL();	
-		} break;
-
-		case Instruction::ADD:
-		{
-			r = ADD();
-		} break;
-
-		case Instruction::SUB:
-		{
-			r = SUB();
-		} break;
-
-		case Instruction::DIV:
-		{
-			r = DIV();
-		} break;
-
-		case Instruction::MUL:
-		{
-			r = MUL();
-		} break;
-
-		case Instruction::AND:
-		{
-			r = AND();
-		} break;
-
-		case Instruction::OR:
-		{
-			r = OR();
-		} break;
-
-		case Instruction::GREATER_THAN:
-		{
-			r = GREATER_THAN();
-		} break;
-
-		case Instruction::LESS_THAN:
-		{
-			r = LESS_THAN();
-		} break;
-
-		case Instruction::EQUALS:
-		{
-			r = EQUALS();
-		} break;
-
-		case Instruction::GREATER:
-		{
-			r = GREATER();
-		} break;
-
-		case Instruction::LESS:
-		{
-			r = LESS();
-		} break;
-
-		case Instruction::NOT:
-		{
-			r = NOT();
-		} break;
-
-		case Instruction::CALL:
-		{
-			r = CALL(inst.param);
-		} break;
-
-		case Instruction::RET:
-		{
-			r = RET();
-		} break;
-
-		case Instruction::JUMP:
-		{
-			r = JUMP(inst.param);
-		} break;
-
-		case Instruction::JUMP_COND:
-		{
-			r = JUMP_COND(inst.param);
-		} break;
-
-		case Instruction::NOOP:
-		{
-			// ... Do nothing
-		} break;
-
-		default:
-		{
-			r = ILLEGAL_INSTRUCTION;
-		} break;
-	}
-
-	if (r == SUCCESS)
-	{
-		m_ic++;
-	}
-
-	return r;
-}
-
-Instruction VM::current_instruction()
-{
-	return m_instructions[m_ic];
-}
-
-bool VM::is_done()
-{
-	return !(m_ic < m_instruction_count);
-}
-
-bool VM::check_stack_overflow()
-{
-	return m_stack.count() >= MAX_STACK_SIZE;
-}
-
-bool VM::check_stack_underflow()
-{
-	return m_stack.count() <= 0;
-}
-
-uint16_t VM::ic()
-{
-	return m_ic;
-}
-
-Array <Value, VM::MAX_STACK_SIZE>& VM::stack()
-{
-	return m_stack;
-}
-
-Array <CallFrame, VM::MAX_STACK_SIZE>& VM::call_frames()
-{
-	return m_call_frames;
-}
 
 #define VERIFY_STACK_UNDERFLOW() \
-	if (check_stack_underflow()) \
+	if (vm->stack.count <= 0) \
 	{ \
-		return STACK_UNDERFLOW; \
+		return TRAP_STACK_UNDERFLOW; \
 	}
 
-#define VERIFY_STACK_OVERFLOW() \
-	if (check_stack_overflow()) \
-	{ \
-		return STACK_OVERFLOW; \
-	}
-
-VM::Trap VM::LOAD_IMMEDIATE(uint16_t idx)
+Trap LOAD_IMMEDIATE(VM* vm, uint16_t idx)
 {
-	if (idx > m_immediate_count)
+	if (idx > vm->immediates.count)
 	{
-		return OUT_OF_BOUNDS;
+		return TRAP_OUT_OF_BOUNDS;
 	}
 
 	VERIFY_STACK_OVERFLOW();
 
-	m_stack.push(m_immediates[idx]);
+	push(&vm->stack, vm->immediates[idx]);
 
-	return SUCCESS;
+	return TRAP_SUCCESS;
 }
 
-VM::Trap VM::LOAD_LOCAL(uint16_t idx)
+Trap LOAD_LOCAL(VM* vm, uint16_t idx)
 {
 	if (idx >= MAX_VARIABLES)
 	{
-		return OUT_OF_BOUNDS;
+		return TRAP_OUT_OF_BOUNDS;
 	}
 
 	VERIFY_STACK_OVERFLOW();
 
-	m_stack.push(m_variables[idx]);
+	push(&vm->stack, vm->variables[idx]);
 
-	return SUCCESS;
+	return TRAP_SUCCESS;
 }
 
-VM::Trap VM::STORE_LOCAL(uint16_t idx)
+Trap STORE_LOCAL(VM* vm, uint16_t idx)
 {
 	if (idx > MAX_VARIABLES)
 	{
-		return OUT_OF_BOUNDS;
+		return TRAP_OUT_OF_BOUNDS;
 	}
 
 	VERIFY_STACK_UNDERFLOW();
 
-	m_variables[idx] = m_stack.pop();
+	vm->variables[idx] = *pop(&vm->stack);
 
-	return SUCCESS;
+	return TRAP_SUCCESS;
 }
 
 // TODO: Load proc
 
-VM::Trap VM::LOAD_NULL()
+Trap LOAD_NULL(VM* vm)
 {
 	VERIFY_STACK_OVERFLOW();
 
-	m_stack.push(Value());
+	push(&vm->stack, make_value());
 
-	return SUCCESS;
+	return TRAP_SUCCESS;
 }
 
 // These ones are very repetative
@@ -273,114 +81,260 @@ VM::Trap VM::LOAD_NULL()
 	OP(LESS, <)
 
 #define OP(name, op) \
-	VM::Trap VM::name() \
+	Trap name(VM* vm) \
 	{ \
 		VERIFY_STACK_UNDERFLOW(); \
 		\
-		Value r = m_stack.pop(); \
+		Value* r = pop(&vm->stack); \
 		\
 		VERIFY_STACK_UNDERFLOW(); \
 		\
-		Value l = m_stack.pop(); \
+		Value* l = pop(&vm->stack); \
 		\
 		VERIFY_STACK_OVERFLOW(); \
 		\
-		m_stack.push(l op r); \
+		push(&vm->stack, *l op *r); \
 		\
-		return SUCCESS; \
+		return TRAP_SUCCESS; \
 	}
 
 DEFINE_OPS
 
-VM::Trap VM::NOT()
+Trap NOT(VM* vm)
 {
 	VERIFY_STACK_UNDERFLOW();
 
-	Value l = m_stack.pop();
+	Value* l = pop(&vm->stack);
 
 	VERIFY_STACK_OVERFLOW();
 
-	m_stack.push(!l);
+	push(&vm->stack, !*l);
 
-	return SUCCESS;
+	return TRAP_SUCCESS;
 }
 
-VM::Trap VM::CALL(uint16_t idx)
+Trap CALL(VM* vm, uint16_t idx)
 {
-	if (m_call_frames.count() >= MAX_STACK_SIZE)
+	if (vm->call_frames.count >= MAX_STACK_SIZE)
 	{
-		return STACK_OVERFLOW;
+		return TRAP_STACK_OVERFLOW;
 	}
 
-	CallFrame& cf = m_call_frames.push();
+	CallFrame* cf = push(&vm->call_frames);
 
-	cf.return_ic = m_ic;
+	cf->return_ic = vm->ic;
 
 	VERIFY_STACK_UNDERFLOW();
 
-	cf.arg_count = static_cast<uint16_t>(m_stack.pop().as_number());
-	cf.stack_base = m_stack.count();
-	cf.local_base = m_locals.count();
+	// Last value on the stack is the parameter count 
+	cf->arg_count = (uint16_t)as_number(pop(&vm->stack));
+	cf->stack_base = vm->stack.count;
+	cf->local_base = vm->locals.count;
 
-	for (uint16_t i = 0; i < cf.arg_count; i++)
+	// Push locals
+	for (uint16_t i = 0; i < cf->arg_count; i++)
 	{
 		VERIFY_STACK_UNDERFLOW();
 
-		m_locals.push(m_stack.pop());
+		push(&vm->locals, *pop(&vm->stack));
 	}
 
-	m_ic = idx - 1;
+	vm->ic = idx - 1;
 
-	return SUCCESS;
+	return TRAP_SUCCESS;
 }
 
-VM::Trap VM::RET()
+Trap RET(VM* vm)
 {
-	const CallFrame& cf = m_call_frames.pop();
+	const CallFrame* cf = pop(&vm->call_frames);
 
-	Value top = m_stack.end();
+	// We expect the last value on the stack to be UNDEFINED or a valid value.
+	Value* top = end(vm->stack);
 
-	m_stack.trim_end(cf.stack_base - 1);
-	m_locals.trim_end(cf.local_base);
+	trim_end(&vm->stack, cf->stack_base - 1);
+	trim_end(&vm->locals, cf->local_base);
 
-	// push the top of the stack if it isn't undefined
-	if (top.type() != Value::UNDEFINED)
+	// Push the top of the stack if it isn't undefined
+	if (top->type != VALUE_UNDEFINED)
 	{
-		m_stack.push(top);
+		push(&vm->stack, *top);
 	}
 
-	m_ic = cf.return_ic;
+	vm->ic = cf->return_ic;
 
-	return SUCCESS;
+	return TRAP_SUCCESS;
 }
 
-VM::Trap VM::JUMP(uint16_t to)
+Trap JUMP(VM* vm, uint16_t to)
 {
-	if (to > m_instruction_count)
+	if (to > vm->instructions.count)
 	{
-		return OUT_OF_BOUNDS;
+		return TRAP_OUT_OF_BOUNDS;
 	}
 
-	m_ic = to;
+	vm->ic = to;
 
-	return SUCCESS;
+	return TRAP_SUCCESS;
 }
 
-VM::Trap VM::JUMP_COND(uint16_t to)
+Trap JUMP_COND(VM* vm, uint16_t to)
 {
-	if (to > m_instruction_count)
+	if (to > vm->instructions.count)
 	{
-		return OUT_OF_BOUNDS;
+		return TRAP_OUT_OF_BOUNDS;
 	}
 
 	VERIFY_STACK_UNDERFLOW();
 
-	Value v = m_stack.pop();
+	Value* v = pop(&vm->stack);
 
-	if (v.as_boolean())
+	if (as_boolean(v))
 	{
-		m_ic = to;
+		vm->ic = to;
 	}	
 
-	return SUCCESS;
+	return TRAP_SUCCESS;
+}
+
+//
+// Public functions
+//
+
+static inline void init(VM* vm, Arena* arena, const Array <Instruction> instructions, const Array <Value> immediates)
+{
+	vm->instructions = instructions;
+	vm->immediates = immediates;
+
+	vm->locals = make_array<Value>(arena, MAX_VARIABLES);
+	vm->stack = make_array<Value>(arena, MAX_STACK_SIZE);
+	vm->call_frames = make_array<CallFrame>(arena, MAX_CALL_FRAMES);
+
+	vm->ic = 0;
+}
+
+static inline Trap execute(VM* vm)
+{
+	Trap r = TRAP_SUCCESS;
+
+	Instruction i = vm->instructions[vm->ic];
+
+	switch (i.type) 
+	{
+		case INSTRUCTION_LOAD_IMMEDIATE:
+		{
+			r = LOAD_IMMEDIATE(vm, i.param);
+		} break;
+	
+		case INSTRUCTION_LOAD_LOCAL:
+		{
+			r = LOAD_LOCAL(vm, i.param);	
+		} break;
+	
+		case INSTRUCTION_STORE_LOCAL:
+		{
+			r = STORE_LOCAL(vm, i.param);	
+		} break;
+	
+		case INSTRUCTION_LOAD_NULL:
+		{
+			r = LOAD_NULL(vm);	
+		} break;
+
+		case INSTRUCTION_ADD:
+		{
+			r = ADD(vm);
+		} break;
+
+		case INSTRUCTION_SUB:
+		{
+			r = SUB(vm);
+		} break;
+
+		case INSTRUCTION_DIV:
+		{
+			r = DIV(vm);
+		} break;
+
+		case INSTRUCTION_MUL:
+		{
+			r = MUL(vm);
+		} break;
+
+		case INSTRUCTION_AND:
+		{
+			r = AND(vm);
+		} break;
+
+		case INSTRUCTION_OR:
+		{
+			r = OR(vm);
+		} break;
+
+		case INSTRUCTION_GREATER_THAN:
+		{
+			r = GREATER_THAN(vm);
+		} break;
+
+		case INSTRUCTION_LESS_THAN:
+		{
+			r = LESS_THAN(vm);
+		} break;
+
+		case INSTRUCTION_EQUALS:
+		{
+			r = EQUALS(vm);
+		} break;
+
+		case INSTRUCTION_GREATER:
+		{
+			r = GREATER(vm);
+		} break;
+
+		case INSTRUCTION_LESS:
+		{
+			r = LESS(vm);
+		} break;
+
+		case INSTRUCTION_NOT:
+		{
+			r = NOT(vm);
+		} break;
+
+		case INSTRUCTION_CALL:
+		{
+			r = CALL(vm, i.param);
+		} break;
+
+		case INSTRUCTION_RET:
+		{
+			r = RET(vm);
+		} break;
+
+		case INSTRUCTION_JUMP:
+		{
+			r = JUMP(vm, i.param);
+		} break;
+
+		case INSTRUCTION_JUMP_COND:
+		{
+			r = JUMP_COND(vm, i.param);
+		} break;
+
+		case INSTRUCTION_NOOP:
+		{
+			// ... Do nothing
+		} break;
+
+		default:
+		{
+			r = TRAP_ILLEGAL_INSTRUCTION;
+		} break;
+	}
+
+	if (r == TRAP_SUCCESS)
+	{
+		vm->ic++;
+	}
+
+	return r;
 }

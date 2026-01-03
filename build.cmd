@@ -13,9 +13,10 @@ for %%a in (%*) do set "%%a=true"
 set common_flags=-std=gnu++2c ^
 	-Isrc ^
 	-ffast-math ^
-	-Wno-c99-designator ^
+	-ferror-limit=100 ^
 	-Wno-undefined-internal ^
 	-Wno-nan-infinity-disabled ^
+	-Wno-tautological-compare ^
 	-nostdlib
 
 set wasm_flags=%common_flags% ^
@@ -27,7 +28,7 @@ set wasm_flags=%common_flags% ^
 set win32_flags=%common_flags% ^
 	-Xlinker -subsystem:console ^
 	-fuse-ld=lld ^
-	-O3 -ftime-trace
+	-g3
 
 set win32_libs= ^
 	-lmsvcrt ^

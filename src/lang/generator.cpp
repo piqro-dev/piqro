@@ -1,72 +1,63 @@
+
 #include <lang/generator.h>
 
 static inline bool identifier_too_long(Token t)
 {
-	ASSERT(t.type == Token::IDENTIFIER);
+	ASSERT(t.type == TOKEN_IDENTIFIER);
 
 	return t.end - t.start - 1 > MAX_IDENTIFIER_NAME_LENGTH;
 }
 
-void Generator::init(const char* source_code, const Token* tokens, uint16_t token_count)
+static inline Token peek_token(const Generator* gen, int16_t offset = 0)
 {
-	m_source_code = source_code; 
-	m_tokens = tokens;
-	m_token_count = token_count;
-
-	m_idx = 0;
-}
-
-Array <Value, MAX_IMMEDIATES>& Generator::immediates()
-{
-	return m_immediates;	
-}
-
-Array <Identifier, MAX_VARIABLES>& Generator::variables()
-{
-	return m_variables;
-}
-
-template <size_t N>
-void Generator::emit_program(Array <Instruction, N>& instructions)
-{
-	while (m_idx < m_token_count)
+	if (gen->ptr + offset > gen->tokens.count)
 	{
-		emit_statement(instructions);
+		return Token{ TOKEN_UNKNOWN, peek_token(gen, -1).line };
 	}
 
-	instructions.emplace(Instruction::HALT);
+	return gen->tokens[gen->ptr + offset];
 }
 
-Token Generator::peek(int16_t offset)
+static inline Token eat_token(Generator* gen)
 {
-	if (m_idx + offset > m_token_count)
+	Token t = gen->tokens[gen->ptr++];
+
+	gen->line = t.line;
+
+	return t;
+}
+
+__attribute__((format(printf, 2, 3)))
+static inline void error(const Generator* gen, const char* fmt, ...)
+{
+	__builtin_va_list args;
+
+	char out[2048];
+
+	__builtin_va_start(args, fmt);
+	__builtin_vsprintf(out, fmt, args);
+	__builtin_va_end(args);
+
+	errorln("Error: line %d: %s", gen->line, out);
+}
+
+static inline Token try_eat_token(Generator* gen, TokenType expected)
+{
+	const Token peek = peek_token(gen);
+
+	if (peek.type != expected)
 	{
-		return { Token::UNKNOWN };
+		error(gen, "Expected %s, got %s", to_string(expected), to_string(peek.type));
 	}
 
-	return m_tokens[m_idx + offset];
+	return gen->tokens[gen->ptr++];
 }
 
-Token Generator::eat()
+static inline bool variable_exists(const Generator* gen, const char* name)
 {
-	return m_tokens[m_idx++];
-}
-
-Token Generator::try_eat(Token::TokenType expected)
-{
-	if (peek().type != expected)
+	for (uint16_t i = 0; i < gen->variables.count; i++)
 	{
-		errorln("Error: Expected %s near %s, got %s", Token{ expected }.as_string(), peek(-1).as_string(), peek().as_string());
-	}
-
-	return eat();
-}
-
-bool Generator::variable_exists(const char* name)
-{
-	for (uint16_t i = 0; i < m_variables.count(); i++)
-	{
-		if (__builtin_strcmp(m_variables[i], name) == 0)
+		if (__builtin_strcmp(gen->variables[i], name) == 0)
 		{
 			return true;
 		}
@@ -75,11 +66,11 @@ bool Generator::variable_exists(const char* name)
 	return false;
 }
 
-bool Generator::procedure_exists(const char* name)
+static inline bool procedure_exists(const Generator* gen, const char* name)
 {
-	for (uint16_t i = 0; i < m_procedures.count(); i++)
+	for (uint16_t i = 0; i < gen->procedures.count; i++)
 	{
-		if (__builtin_strcmp(m_procedures[i].name, name) == 0)
+		if (__builtin_strcmp(gen->procedures[i].name, name) == 0)
 		{
 			return true;
 		}
@@ -88,404 +79,451 @@ bool Generator::procedure_exists(const char* name)
 	return false;
 }
 
-Procedure& Generator::get_or_create_procedure(const char* name)
+static inline Procedure* get_or_create_procedure(Generator* gen, const char* name)
 {
-	for (uint16_t i = 0; i < m_procedures.count(); i++)
+	for (uint16_t i = 0; i < gen->procedures.count; i++)
 	{
-		if (__builtin_strcmp(m_procedures[i].name, name) == 0)
+		if (__builtin_strcmp(gen->procedures[i].name, name) == 0)
 		{
-			return m_procedures[i];
+			return &gen->procedures[i];
 		}
 	}
 
-	Procedure& proc = m_procedures.push();
-
-	__builtin_strcpy(proc.name, name);
+	Procedure* proc = push(&gen->procedures);
+	__builtin_strcpy(proc->name, name);
 
 	return proc;
 }
 
-uint16_t Generator::get_or_create_variable(const char* name)
+static inline uint16_t get_or_create_variable(Generator* gen, const char* name)
 {
-	for (uint16_t i = 0; i < m_variables.count(); i++)
+	for (uint16_t i = 0; i < gen->variables.count; i++)
 	{
-		if (__builtin_strcmp(m_variables[i], name) == 0)
+		if (__builtin_strcmp(gen->variables[i], name) == 0)
 		{
 			return i;
 		}
 	}
 
-	__builtin_strcpy(m_variables.push(), name);
+	__builtin_strcpy(*push(&gen->variables), name);
 
-	return m_variables.count() - 1;
+	return gen->variables.count - 1;
 }
 
-uint16_t Generator::get_or_create_immediate(const Value& v)
+static inline uint16_t get_or_create_immediate(Generator* gen, Value v)
 {
-	for (uint16_t i = 0; i < m_immediates.count(); i++)
+	for (uint16_t i = 0; i < gen->immediates.count; i++)
 	{
-		if (m_immediates[i].as_number() == v.as_number())
+		if (as_number(&gen->immediates[i]) == as_number(&v))
 		{
 			return i;
 		}
 	}
 
-	m_immediates.push({ v });
+	push(&gen->immediates, v);
 
-	return m_immediates.count() - 1;
+	return gen->immediates.count - 1;
 }
 
+static inline void emit_expression(Generator* gen, Array <Instruction>* out);
+
+static inline void emit_statement(Generator* gen, Array <Instruction>* out);
+
+//
+// Expressions
+//
 
 
-template <size_t N>
-void Generator::emit_number_expression(Array <Instruction, N>& instructions)
+static inline void emit_number_expression(Generator* gen, Array <Instruction>* out)
 {
-	// <expr>
-	Token expr = eat();
+	Token number = eat_token(gen);
 
-	// TODO: A number might be longer than this, not sure if it needs attention?
+	// A number might be longer than this, not sure if it needs attention?
 	char buf[256] = {};
-	expr.value(m_source_code, buf, 256);
+	as_string(number, gen->source, buf, 256);
 
-	instructions.emplace(Instruction::LOAD_IMMEDIATE, get_or_create_immediate(static_cast<float>(atof(buf))));
+	Value imm = make_value((float)atof(buf));
+
+	emplace(out, INSTRUCTION_LOAD_IMMEDIATE, get_or_create_immediate(gen, imm));
 }
 
-template <size_t N>
-void Generator::emit_identifier_expression(Array <Instruction, N>& instructions)
+static inline void emit_identifier_expression(Generator* gen, Array <Instruction>* out)
 {
-	// <expr>
-	Token expr = eat();
+	Token ident = eat_token(gen);
 
-	// Expression can be an identifier
-	char name[256] = {};
-	expr.value(m_source_code, name, 256);
+	Identifier name = {};
+	as_string(ident, gen->source, name, 256);
 
-	// ... which may not exist
-	if (!variable_exists(name))
+	if (!variable_exists(gen, name))
 	{
-		errorln("Error: Undefined identifier '%s'", name);
+		error(gen, "Undefined identifier '%s'", name);
 	}
 
-	instructions.emplace(Instruction::LOAD_LOCAL, get_or_create_variable(name));
+	emplace(out, INSTRUCTION_LOAD_LOCAL, get_or_create_variable(gen, name));
 }
 
-template <size_t N>
-void Generator::emit_boolean_expression(Array <Instruction, N>& instructions)
+static inline void emit_boolean_expression(Generator* gen, Array <Instruction>* out)
 {
-	// <expr>
-	Token expr = eat();
+	Token boolean = eat_token(gen);
 
-	if (expr.type == Token::TRUE)
+	if (boolean.type == TOKEN_TRUE)
 	{
-		instructions.emplace(Instruction::LOAD_IMMEDIATE, get_or_create_immediate(true));
+		emplace(out, INSTRUCTION_LOAD_IMMEDIATE, get_or_create_immediate(gen, make_value(true)));
 	}
-	else if (expr.type == Token::FALSE)
+	else if (boolean.type == TOKEN_FALSE)
 	{
-		instructions.emplace(Instruction::LOAD_IMMEDIATE, get_or_create_immediate(false));
+		emplace(out, INSTRUCTION_LOAD_IMMEDIATE, get_or_create_immediate(gen, make_value(false)));
 	}
 }
 
-// <expr>
-template <size_t N>
-void Generator::emit_expression(Array <Instruction, N>& instructions)
+// <ident>(<expr>, <expr>...)
+static inline void emit_procedure_expression(Generator* gen, Array <Instruction>* out)
 {
-	// <expr>
-	Token expr = peek();
+	Token ident = eat_token(gen);
 
-	if (expr.type == Token::NUMBER_LIT)
+	Identifier name = {};
+	as_string(ident, gen->source, name, 256);
+
+	// May not exist
+	if (!procedure_exists(gen, name))
 	{
-		emit_number_expression(instructions);
+		error(gen, "Undefined procedure '%s'", name);
 	}
-	else if (expr.type == Token::IDENTIFIER)
+
+	// (
+	Token open = eat_token(gen);
+
+	uint8_t param_count = 0; 
+
+	// <expr>, <expr>...
+	while (peek_token(gen).type != TOKEN_CLOSE_BRACE)
 	{
-		emit_identifier_expression(instructions);
+		// Check for (,<expr>
+		if (peek_token(gen, -1).type == TOKEN_OPEN_BRACE && peek_token(gen).type == TOKEN_COMMA)
+		{
+			error(gen, "Expected expression after `(` in procedure call, got `,`");
+		}
+
+		// <expr>
+		emit_expression(gen, out);
+
+		param_count++;
+
+		if (peek_token(gen).type != TOKEN_CLOSE_BRACE)
+		{
+			// ,
+			try_eat_token(gen, TOKEN_COMMA);
+	
+			// Check for <expr>,)
+			if (peek_token(gen).type == TOKEN_CLOSE_BRACE)
+			{
+				error(gen, "Expected parameter after `,` in procedure call, got `)`");
+			}
+		}
 	}
-	else if (expr.type == Token::TRUE || expr.type == Token::FALSE)
+
+	Procedure* proc = get_or_create_procedure(gen, name);
+
+	if (proc->param_count != param_count)
 	{
-		emit_boolean_expression(instructions);
+		error(gen, "Expected %d parameters for procedure '%s', got %d", proc->param_count, name, param_count);
+	}
+
+	// )
+	Token close = try_eat_token(gen, TOKEN_CLOSE_BRACE);
+}
+
+static inline void emit_expression(Generator* gen, Array <Instruction>* out)
+{
+	Token expr = peek_token(gen);
+
+	if (expr.type == TOKEN_NUMBER)
+	{
+		emit_number_expression(gen, out);
+	}
+	else if (expr.type == TOKEN_IDENTIFIER)
+	{
+		if (peek_token(gen, 1).type == TOKEN_OPEN_BRACE)
+		{
+			emit_procedure_expression(gen, out);
+		}
+		else
+		{
+			emit_identifier_expression(gen, out);
+		}
+	}
+	else if (expr.type == TOKEN_TRUE || expr.type == TOKEN_FALSE)
+	{
+		emit_boolean_expression(gen, out);
 	}
 	else
 	{
-		errorln("Error: Expected expression near %s, got %s", peek(-1).as_string(), expr.as_string());
+		error(gen, "Expected expression");
 	}
 }
 
-// <ident> = <expr>
-template <size_t N>
-void Generator::emit_assign_statement(Array <Instruction, N>& instructions)
+//
+// Scope
+//
+
+static inline Scope* begin_scope(Generator* gen, Array <Instruction>* out) 
 {
-	// <ident>
-	Token ident = eat();
+	// {
+	Token open = eat_token(gen);
 
-	char name[256] = {};
-	ident.value(m_source_code, name, 256);
+	Scope* scope = push(&gen->scopes);
 
-	// It may not exist 
-	if (!variable_exists(name))
+	scope->first_inst = out->count;
+	scope->local_base = gen->variables.count;
+
+	return scope;
+}
+
+static inline void end_scope(Generator* gen) 
+{
+	// }
+	Token close = try_eat_token(gen, TOKEN_CLOSE_CURLY);
+
+	trim_end(&gen->variables, pop(&gen->scopes)->local_base);
+}
+
+static inline void emit_scope(Generator* gen, Array <Instruction>* out)
+{
+	begin_scope(gen, out);
+
+	while (peek_token(gen).type != TOKEN_CLOSE_CURLY)
 	{
-		errorln("Error: Undefined identifier '%s'", name);
+		emit_statement(gen, out);
+	}
+
+	end_scope(gen);
+}
+
+//
+// Statements
+//
+
+// <ident> = <expr>
+static inline void emit_assign_statement(Generator* gen, Array <Instruction>* out)
+{
+	// <ident> 
+	Token ident = eat_token(gen);
+
+	Identifier name = {};
+	as_string(ident, gen->source, name, 256);
+
+	if (!variable_exists(gen, name)) 
+	{
+		error(gen, "Undefined identifier '%s'", name);
 	}
 
 	// =
-	eat();
+	Token eq = try_eat_token(gen, TOKEN_EQUALS);
 
 	// <expr>
-	emit_expression(instructions);
+	emit_expression(gen, out);
 
-	instructions.emplace(Instruction::STORE_LOCAL, get_or_create_variable(name));
+	emplace(out, INSTRUCTION_STORE_LOCAL, get_or_create_variable(gen, name));
 }
 
 // var <ident> = <expr>
-template <size_t N>
-void Generator::emit_var_statement(Array <Instruction, N>& instructions)
+static inline void emit_var_statement(Generator* gen, Array <Instruction>* out)
 {
 	// var
-	Token var = eat();
+	Token var = eat_token(gen);
 	
 	// <ident>
-	Token id = try_eat(Token::IDENTIFIER);
+	Token ident = try_eat_token(gen, TOKEN_IDENTIFIER);
 
-	char name[256] = {};
-	id.value(m_source_code, name, 256);
+	Identifier name = {};
+	as_string(ident, gen->source, name, 256);
 
-	// Reject anything longer than sizeof (Variable::name)
-	if (identifier_too_long(id))
+	if (identifier_too_long(ident))
 	{
-		errorln("Error: Identifier '%s' is too long", name);
+		error(gen, "Identifier '%s' is too long", name);
 	}
 
-	// It might already exist
-	if (variable_exists(name))
+	if (variable_exists(gen, name) || procedure_exists(gen, name)) 
 	{
-		errorln("Error: Variable '%s' redefined", name);
+		error(gen, "Identifier '%s' redefined", name);
 	}
 
 	// =
-	try_eat(Token::EQUALS);
+	try_eat_token(gen, TOKEN_EQUALS);
 
 	// <expr>
-	emit_expression(instructions);
+	emit_expression(gen, out);
 
-	instructions.emplace(Instruction::STORE_LOCAL, get_or_create_variable(name));
+	emplace(out, INSTRUCTION_STORE_LOCAL, get_or_create_variable(gen, name));
 }
 
-// FIXME: Nested loops are wacky and don't work.
-// Example: repeat 2 { repeat 2 {} } will execute 6 times.
-
-// repeat <expr> {}
-template <size_t N>
-void Generator::emit_repeat_statement(Array <Instruction, N>& instructions)
+static inline void emit_define_statement(Generator* gen, Array <Instruction>* out)
 {
-	// repeat
-	Token repeat = eat();
-
-	// <expr>
-	emit_expression(instructions);
-
-	// Create a hidden variable and do the logic on it 
-	char name[256] = {};
-	__builtin_sprintf(name, "_repeat_local_%hu", static_cast<uint16_t>(m_variables.count()));
-
-	// _repeat_local = <expr>
-	const uint16_t repeat_var = get_or_create_variable(name);
-	instructions.emplace(Instruction::STORE_LOCAL, repeat_var);
-
-	// {}
-	const Scope scope = emit_scope(instructions);
-
-	// _repeat_local = _repeat_local - 1
-	instructions.emplace(Instruction::LOAD_LOCAL, repeat_var);
-	instructions.emplace(Instruction::LOAD_IMMEDIATE, get_or_create_immediate(1.0f));
-	instructions.emplace(Instruction::SUB);
-	instructions.emplace(Instruction::STORE_LOCAL, repeat_var);
-
-	// If (0 < _repeat_local), jump back 
-	instructions.emplace(Instruction::LOAD_IMMEDIATE, get_or_create_immediate(0.0f));
-	instructions.emplace(Instruction::LOAD_LOCAL, repeat_var);
-	instructions.emplace(Instruction::LESS);
-	instructions.emplace(Instruction::JUMP_COND, scope.first_inst);
-}
-
-// define <ident>(<ident>, <ident>, ...) { ... }
-template <size_t N>
-void Generator::emit_define_statement(Array <Instruction, N>& instructions)
-{
-	if (m_in_procedure)
-	{
-		errorln("Error: Cannot define procedure inside another one");
-	}
-
 	// define
-	Token define = eat();
+	Token define = eat_token(gen);
+
+	if (gen->current_procedure)
+	{
+		error(gen, "Cannot define procedure inside another one");
+	}
 
 	// <ident>
-	Token ident = try_eat(Token::IDENTIFIER);
+	Token ident = try_eat_token(gen, TOKEN_IDENTIFIER);
 
 	Identifier name = {};
-	ident.value(m_source_code, name, 256);
+	as_string(ident, gen->source, name, 256);
 
-	// It might already exist
-	if (procedure_exists(name))
+	if (variable_exists(gen, name) || procedure_exists(gen, name)) 
 	{
-		errorln("Error: Variable '%s' redefined", name);
+		error(gen, "Identifier '%s' redefined", name);
 	}
 
-	Procedure& proc = get_or_create_procedure(name);
+	Procedure* proc = get_or_create_procedure(gen, name);
 
 	// (
-	Token open = try_eat(Token::OPEN_BRACE);
+	Token open = try_eat_token(gen, TOKEN_OPEN_BRACE);
 
 	// <ident>, <ident>...
-	while (peek().type != Token::CLOSE_BRACE)
+	while (peek_token(gen).type != TOKEN_CLOSE_BRACE)
 	{
 		// Check for (,<ident>
-		if (peek().type == Token::COMMA && peek(-1).type == Token::OPEN_BRACE)
+		if (peek_token(gen, -1).type == TOKEN_OPEN_BRACE && peek_token(gen).type == TOKEN_COMMA)
 		{
-			errorln("Error: Expected parameter before `)` in procedure definition, got `,`");
+			error(gen, "Expected parameter after `(` in procedure definition, got `,`");
 		}
 
-		Token ident = try_eat(Token::IDENTIFIER);
+		// <ident>
+		Token ident = try_eat_token(gen, TOKEN_IDENTIFIER);
 
-		// Check for <ident>,)
-		if (peek().type == Token::COMMA)
+		Identifier name = {};
+		as_string(ident, gen->source, name, 256);
+
+		if (variable_exists(gen, name))
 		{
-			eat();
+			error(gen, "Parameter/variable redefinition in procedure definition");
+		}
 
-			if (peek().type == Token::CLOSE_BRACE)
+		get_or_create_variable(gen, name);
+
+		proc->param_count++;
+
+		if (peek_token(gen).type != TOKEN_CLOSE_BRACE)
+		{
+			// ,
+			try_eat_token(gen, TOKEN_COMMA);
+	
+			// Check for <ident>,)
+			if (peek_token(gen).type == TOKEN_CLOSE_BRACE)
 			{
-				errorln("Error: Expected parameter after `,` in procedure definition, got `)`");
+				error(gen, "Expected parameter after `,` in procedure call, got `)`");
 			}
 		}
 	}
 
 	// )
-	Token close = try_eat(Token::CLOSE_BRACE);
+	Token close = try_eat_token(gen, TOKEN_CLOSE_BRACE);
 
-	m_in_procedure = true;
+	proc->scope = begin_scope(gen, out);
+	proc->scope->local_base = gen->variables.count - proc->param_count;
+
+	gen->current_procedure = proc;
 
 	// { ... }
-	emit_scope(instructions);
+	while (peek_token(gen).type != TOKEN_CLOSE_CURLY)
+	{
+		emit_statement(gen, out);
+	}
 
-	m_in_procedure = false;
+	end_scope(gen);
+
+	gen->current_procedure = nullptr;
+
+	errorln("TODO: define statement codegen");
 }
 
-// <ident>(<expr>, <expr>, ...)
-template <size_t N>
-void Generator::emit_procedure_statement(Array <Instruction, N>& instructions)
+// return <expr>
+static inline void emit_return_statement(Generator* gen, Array <Instruction>* out)
 {
-	// <ident>
-	Token ident = eat();
-
-	Identifier name = {};
-	ident.value(m_source_code, name, 256);
-
-	// Ensure it's short enough
-	if (identifier_too_long(ident))
+	if (!gen->current_procedure)
 	{
-		errorln("Error: Procedure name '%s' is too long", name);
+		error(gen, "Cannot use return outside procedure");
 	}
 
-	// May not exist at the time
-	if (!procedure_exists(name))
-	{
-		errorln("Error: Undefined procedure '%s'", name);
-	}
+	// return
+	Token return_ = eat_token(gen);
 
-	// (
-	Token open = eat();
+	// <expr>
+	emit_expression(gen, out);
 
-	// <expr>, <expr>...
-	while (peek().type != Token::CLOSE_BRACE)
-	{
-		// Check for (,<expr>
-		if (peek().type == Token::COMMA && peek(-1).type == Token::OPEN_BRACE)
-		{
-			errorln("Error: Expected parameter before `)` in procedure definition, got `,`");
-		}
-
-		emit_expression(instructions);
-
-		// Check for <expr>,)
-		if (peek().type == Token::COMMA)
-		{
-			eat();
-
-			if (peek().type == Token::CLOSE_BRACE)
-			{
-				errorln("Error: Expected parameter after `,` in procedure definition, got `)`");
-			}
-		}
-	}
-
-	// )
-	Token close = try_eat(Token::CLOSE_BRACE);
+	errorln("TODO: return statement codegen");
 }
 
-template <size_t N>
-void Generator::emit_statement(Array <Instruction, N>& instructions)
+static inline void emit_statement(Generator* gen, Array <Instruction>* out)
 {
-	// var <ident> = ...
-	if (peek().type == Token::VAR)
+	// var <ident> = <expr>
+	if (peek_token(gen).type == TOKEN_VAR)
 	{
-		emit_var_statement(instructions);
+		emit_var_statement(gen, out);	
 	}
-	// <ident> = ...
-	else if (peek().type == Token::IDENTIFIER && peek(1).type == Token::EQUALS)
+	else if (peek_token(gen).type == TOKEN_IDENTIFIER)
 	{
-		emit_assign_statement(instructions);
+		// <ident>(...)
+		if (peek_token(gen, 1).type == TOKEN_OPEN_BRACE)
+		{
+			emit_procedure_expression(gen, out);
+		}
+		// <ident> = <expr>
+		else
+		{
+			emit_assign_statement(gen, out);
+		}
 	}
-	// repeat <expr> {}
-	else if (peek().type == Token::REPEAT)
+	// define <ident>(...) { ... }
+	else if (peek_token(gen).type == TOKEN_DEFINE)
 	{
-		emit_repeat_statement(instructions);
+		emit_define_statement(gen, out);
+	}
+	// return <expr>
+	else if (peek_token(gen).type == TOKEN_RETURN)
+	{
+		emit_return_statement(gen, out);
 	}
 	// { ... }
-	else if (peek().type == Token::OPEN_CURLY)
+	else if (peek_token(gen).type == TOKEN_OPEN_CURLY)
 	{
-		emit_scope(instructions);
-	}
-	// define <ident>(<ident>, <ident>, ...)
-	else if (peek().type == Token::DEFINE)
-	{
-		emit_define_statement(instructions);
-	}
-	// <ident>(<expr>, <expr>, ...)
-	else if (peek().type == Token::IDENTIFIER && peek(1).type == Token::OPEN_BRACE)
-	{
-		emit_procedure_statement(instructions);
+		emit_scope(gen, out);
 	}
 	else
 	{
-		errorln("Error: Expected statement, got %s", peek().as_string());
+		error(gen, "Expected statement, got %s", to_string(peek_token(gen).type));
 	}
 }
 
-template <size_t N>
-Scope Generator::emit_scope(Array <Instruction, N>& instructions)
+//
+// Public code
+//
+
+static inline void init(Generator* gen, Arena* arena, const char* source, Array <Token> tokens)
 {
-	// {
-	Token open = eat();
+	gen->source = source;
 
-	Scope& scope = m_scopes.push();
+	gen->tokens = tokens;
 
-	scope.first_inst = instructions.count() - 1;
-	scope.local_base = m_variables.count();
+	gen->immediates = make_array<Value>(arena, MAX_IMMEDIATES);
+	gen->variables = make_array<Identifier>(arena, MAX_VARIABLES);
+	gen->scopes = make_array<Scope>(arena, MAX_SCOPES);
+	gen->procedures = make_array<Procedure>(arena, MAX_PROCEDURES);
 
-	// Statements
-	while (peek().type != Token::CLOSE_CURLY)
+	gen->current_procedure = nullptr;
+	
+	gen->line = 1;
+	gen->ptr = 0;
+}
+
+static inline void emit_program(Generator* gen, Array <Instruction>* out)
+{
+	while (gen->ptr < gen->tokens.count)
 	{
-		emit_statement(instructions);
+		emit_statement(gen, out);
 	}
-
-	// }
-	Token close = eat();
-
-	if (close.type != Token::CLOSE_CURLY)
-	{
-		errorln("Error: Expected `}`, got %s", close.as_string());
-	}
-
-	m_variables.trim_end(scope.local_base);
-
-	return m_scopes.pop();
 }
