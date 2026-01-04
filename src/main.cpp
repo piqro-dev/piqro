@@ -6,17 +6,22 @@
 
 #include <lang/generator.h>
 
-static constexpr char src[] = R"(
+#include <lang/vm.h>
+
+static constexpr char src[] = 
+R"(
 define b() {
 	return 10
 }
-
 var a = b()
+var c = b()
 )";
 
 static Tokenizer tok;
 
 static Generator gen;
+
+static VM vm;
 
 static inline void print_tokens(Array <Token> tokens)
 {
@@ -49,20 +54,40 @@ static inline void print_instructions(Array <Instruction> instructions)
 		if (it.type == INSTRUCTION_LOAD_IMMEDIATE)
 		{
 			char buf[128] = {};
-			as_string(&gen.immediates[it.param], buf, 128);
+			as_string(&gen.immediates[it.arg], buf, 128);
 
-			println("\t[%d] %-20s %d (%s)", idx, to_string(it.type), it.param, buf);
+			println("\t[%d] %-20s %d (%s)", idx, to_string(it.type), it.arg, buf);
 		}
 		else if (it.type == INSTRUCTION_LOAD_LOCAL || it.type == INSTRUCTION_STORE_LOCAL)
 		{
-			println("\t[%d] %-20s %d (%s)", idx, to_string(it.type), it.param, gen.variables[it.param]);
+			println("\t[%d] %-20s %d (%s)", idx, to_string(it.type), it.arg, gen.variables[it.arg]);
 		}
 		else
 		{
-			println("\t[%d] %-20s %d", idx, to_string(it.type), it.param);
+			println("\t[%d] %-20s %d", idx, to_string(it.type), it.arg);
 		}
 
 		idx++;
+	}
+}
+
+static inline void dump_stack(const VM* vm) 
+{
+	println("Stack dump:");
+	
+	if (vm->stack.count > 0)
+	{
+		for (size_t i = 0; i < vm->stack.count; i++)
+		{
+			char buf[128] = {};
+			as_string(&vm->stack[i], buf, 128);
+
+			println("\t%s", buf);
+		}
+	}
+	else
+	{
+		println("\tN/A");
 	}
 }
 
@@ -84,6 +109,41 @@ extern "C" void mainCRTStartup()
 	Array <Instruction> instructions = make_array<Instruction>(&arena, 1024);
 	emit_program(&gen, &instructions);
 	print_instructions(instructions);
+
+	init(&vm, &arena, instructions, gen.immediates);
+
+	println("\nExecution:");
+
+	while (true)
+	{
+		const Instruction i = vm.instructions[vm.ic]; 
+	
+		println("\t-> %-20s %d", to_string(i.type), i.arg);
+		
+		Trap r = execute(&vm);
+
+		if (r == TRAP_HALT_EXECUTION)
+		{
+			println("\nVM: Execution halted.");
+
+			break;
+		}
+
+		if (r != TRAP_SUCCESS)
+		{
+			constexpr const char* strings[] =
+			{
+				[TRAP_STACK_OVERFLOW]      = "Stack overflow",
+				[TRAP_STACK_UNDERFLOW]     = "Stack underflow",
+				[TRAP_OUT_OF_BOUNDS]       = "Out of bounds",
+				[TRAP_ILLEGAL_INSTRUCTION] = "Illegal instruction"
+			};
+
+			errorln("VM: %s.", strings[r]);
+
+			break;
+		}
+	}
 
 	exit(0);
 }

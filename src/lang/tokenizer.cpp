@@ -201,8 +201,21 @@ static inline void tokenize(Tokenizer* tok, Array <Token>* out)
 
 			case '/':
 			{
-				emplace(out, TOKEN_SLASH, tok->line, tok->ptr, tok->ptr + 1);	
 				eat_char(tok);
+
+				// Comment
+				if (peek_char(tok) == '/')
+				{
+					while (peek_char(tok) != '\n')
+					{
+						eat_char(tok);
+					}
+				}
+				else
+				{
+					emplace(out, TOKEN_SLASH, tok->line, tok->ptr, tok->ptr + 1);	
+				}
+
 			} break;
 
 			case '=':

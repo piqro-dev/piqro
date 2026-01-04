@@ -12,7 +12,7 @@
 		return TRAP_STACK_UNDERFLOW; \
 	}
 
-Trap LOAD_IMMEDIATE(VM* vm, uint16_t idx)
+static inline Trap LOAD_IMMEDIATE(VM* vm, uint16_t idx)
 {
 	if (idx > vm->immediates.count)
 	{
@@ -26,7 +26,7 @@ Trap LOAD_IMMEDIATE(VM* vm, uint16_t idx)
 	return TRAP_SUCCESS;
 }
 
-Trap LOAD_LOCAL(VM* vm, uint16_t idx)
+static inline Trap LOAD_LOCAL(VM* vm, uint16_t idx)
 {
 	if (idx >= MAX_VARIABLES)
 	{
@@ -40,7 +40,7 @@ Trap LOAD_LOCAL(VM* vm, uint16_t idx)
 	return TRAP_SUCCESS;
 }
 
-Trap STORE_LOCAL(VM* vm, uint16_t idx)
+static inline Trap STORE_LOCAL(VM* vm, uint16_t idx)
 {
 	if (idx > MAX_VARIABLES)
 	{
@@ -56,7 +56,7 @@ Trap STORE_LOCAL(VM* vm, uint16_t idx)
 
 // TODO: Load proc
 
-Trap LOAD_NULL(VM* vm)
+static inline Trap LOAD_NULL(VM* vm)
 {
 	VERIFY_STACK_OVERFLOW();
 
@@ -81,7 +81,7 @@ Trap LOAD_NULL(VM* vm)
 	OP(LESS, <)
 
 #define OP(name, op) \
-	Trap name(VM* vm) \
+	static inline Trap name(VM* vm) \
 	{ \
 		VERIFY_STACK_UNDERFLOW(); \
 		\
@@ -100,7 +100,7 @@ Trap LOAD_NULL(VM* vm)
 
 DEFINE_OPS
 
-Trap NOT(VM* vm)
+static inline Trap NOT(VM* vm)
 {
 	VERIFY_STACK_UNDERFLOW();
 
@@ -113,7 +113,7 @@ Trap NOT(VM* vm)
 	return TRAP_SUCCESS;
 }
 
-Trap CALL(VM* vm, uint16_t idx)
+static inline Trap CALL(VM* vm, uint16_t idx)
 {
 	if (vm->call_frames.count >= MAX_STACK_SIZE)
 	{
@@ -126,7 +126,7 @@ Trap CALL(VM* vm, uint16_t idx)
 
 	VERIFY_STACK_UNDERFLOW();
 
-	// Last value on the stack is the parameter count 
+	// Top of the stack is the parameter count 
 	cf->arg_count = (uint16_t)as_number(pop(&vm->stack));
 	cf->stack_base = vm->stack.count;
 	cf->local_base = vm->locals.count;
@@ -144,17 +144,18 @@ Trap CALL(VM* vm, uint16_t idx)
 	return TRAP_SUCCESS;
 }
 
-Trap RET(VM* vm)
+static inline Trap RET(VM* vm)
 {
 	const CallFrame* cf = pop(&vm->call_frames);
 
-	// We expect the last value on the stack to be UNDEFINED or a valid value.
-	Value* top = end(vm->stack);
-
-	trim_end(&vm->stack, cf->stack_base - 1);
 	trim_end(&vm->locals, cf->local_base);
+	trim_end(&vm->stack, cf->stack_base);
 
-	// Push the top of the stack if it isn't undefined
+	const Value* top = end(vm->stack);
+
+	// All procedures are required to load a value on the stack followed by a RET statement at the end.
+	// If the value on the stack is (undefined), which is our NULL type, we assume no usable value will be
+	// returned.
 	if (top->type != VALUE_UNDEFINED)
 	{
 		push(&vm->stack, *top);
@@ -165,19 +166,19 @@ Trap RET(VM* vm)
 	return TRAP_SUCCESS;
 }
 
-Trap JUMP(VM* vm, uint16_t to)
+static inline Trap JUMP(VM* vm, uint16_t to)
 {
 	if (to > vm->instructions.count)
 	{
 		return TRAP_OUT_OF_BOUNDS;
 	}
 
-	vm->ic = to;
+	vm->ic = to - 1;
 
 	return TRAP_SUCCESS;
 }
 
-Trap JUMP_COND(VM* vm, uint16_t to)
+static inline Trap JUMP_COND(VM* vm, uint16_t to)
 {
 	if (to > vm->instructions.count)
 	{
@@ -190,14 +191,14 @@ Trap JUMP_COND(VM* vm, uint16_t to)
 
 	if (as_boolean(v))
 	{
-		vm->ic = to;
+		vm->ic = to - 1;
 	}	
 
 	return TRAP_SUCCESS;
 }
 
 //
-// Public functions
+// Public
 //
 
 static inline void init(VM* vm, Arena* arena, const Array <Instruction> instructions, const Array <Value> immediates)
@@ -222,17 +223,17 @@ static inline Trap execute(VM* vm)
 	{
 		case INSTRUCTION_LOAD_IMMEDIATE:
 		{
-			r = LOAD_IMMEDIATE(vm, i.param);
+			r = LOAD_IMMEDIATE(vm, i.arg);
 		} break;
 	
 		case INSTRUCTION_LOAD_LOCAL:
 		{
-			r = LOAD_LOCAL(vm, i.param);	
+			r = LOAD_LOCAL(vm, i.arg);	
 		} break;
 	
 		case INSTRUCTION_STORE_LOCAL:
 		{
-			r = STORE_LOCAL(vm, i.param);	
+			r = STORE_LOCAL(vm, i.arg);	
 		} break;
 	
 		case INSTRUCTION_LOAD_NULL:
@@ -302,7 +303,7 @@ static inline Trap execute(VM* vm)
 
 		case INSTRUCTION_CALL:
 		{
-			r = CALL(vm, i.param);
+			r = CALL(vm, i.arg);
 		} break;
 
 		case INSTRUCTION_RET:
@@ -312,17 +313,22 @@ static inline Trap execute(VM* vm)
 
 		case INSTRUCTION_JUMP:
 		{
-			r = JUMP(vm, i.param);
+			r = JUMP(vm, i.arg);
 		} break;
 
 		case INSTRUCTION_JUMP_COND:
 		{
-			r = JUMP_COND(vm, i.param);
+			r = JUMP_COND(vm, i.arg);
 		} break;
 
 		case INSTRUCTION_NOOP:
 		{
 			// ... Do nothing
+		} break;
+
+		case INSTRUCTION_HALT:
+		{
+			r = TRAP_HALT_EXECUTION;
 		} break;
 
 		default:

@@ -24,7 +24,10 @@ struct Scope
 struct Procedure
 {
 	char name[64];
-	uint8_t param_count;
+
+	uint8_t arg_count;
+	bool returns_value;
+	
 	Scope* scope;
 };
 

@@ -15,6 +15,7 @@ set common_flags=-std=gnu++2c ^
 	-ffast-math ^
 	-ferror-limit=100 ^
 	-Wno-undefined-internal ^
+	-Wno-c99-designator ^
 	-Wno-nan-infinity-disabled ^
 	-Wno-tautological-compare ^
 	-nostdlib

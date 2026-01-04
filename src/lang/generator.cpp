@@ -133,7 +133,6 @@ static inline void emit_statement(Generator* gen, Array <Instruction>* out);
 // Expressions
 //
 
-
 static inline void emit_number_expression(Generator* gen, Array <Instruction>* out)
 {
 	Token number = eat_token(gen);
@@ -193,7 +192,7 @@ static inline void emit_procedure_expression(Generator* gen, Array <Instruction>
 	// (
 	Token open = eat_token(gen);
 
-	uint8_t param_count = 0; 
+	uint8_t arg_count = 0; 
 
 	// <expr>, <expr>...
 	while (peek_token(gen).type != TOKEN_CLOSE_BRACE)
@@ -207,7 +206,7 @@ static inline void emit_procedure_expression(Generator* gen, Array <Instruction>
 		// <expr>
 		emit_expression(gen, out);
 
-		param_count++;
+		arg_count++;
 
 		if (peek_token(gen).type != TOKEN_CLOSE_BRACE)
 		{
@@ -217,20 +216,26 @@ static inline void emit_procedure_expression(Generator* gen, Array <Instruction>
 			// Check for <expr>,)
 			if (peek_token(gen).type == TOKEN_CLOSE_BRACE)
 			{
-				error(gen, "Expected parameter after `,` in procedure call, got `)`");
+				error(gen, "Expected argument after `,` in procedure call, got `)`");
 			}
 		}
 	}
 
 	Procedure* proc = get_or_create_procedure(gen, name);
 
-	if (proc->param_count != param_count)
+	if (proc->arg_count != arg_count)
 	{
-		error(gen, "Expected %d parameters for procedure '%s', got %d", proc->param_count, name, param_count);
+		error(gen, "Expected %d arguments for procedure '%s', got %d", proc->arg_count, name, arg_count);
 	}
 
 	// )
 	Token close = try_eat_token(gen, TOKEN_CLOSE_BRACE);
+
+	// Push the argument count to be the last
+	emplace(out, INSTRUCTION_LOAD_IMMEDIATE, get_or_create_immediate(gen, make_value((float)proc->arg_count)));
+
+	// Call the procedure
+	emplace(out, INSTRUCTION_CALL, proc->scope->first_inst);
 }
 
 static inline void emit_expression(Generator* gen, Array <Instruction>* out)
@@ -273,18 +278,22 @@ static inline Scope* begin_scope(Generator* gen, Array <Instruction>* out)
 
 	Scope* scope = push(&gen->scopes);
 
-	scope->first_inst = out->count;
+	scope->first_inst = out->count + 1;
 	scope->local_base = gen->variables.count;
 
 	return scope;
 }
 
-static inline void end_scope(Generator* gen) 
+static inline void end_scope(Generator* gen, Array <Instruction>* out) 
 {
 	// }
 	Token close = try_eat_token(gen, TOKEN_CLOSE_CURLY);
 
-	trim_end(&gen->variables, pop(&gen->scopes)->local_base);
+	Scope* scope = pop(&gen->scopes);
+
+	scope->last_inst = out->count;
+
+	trim_end(&gen->variables, scope->local_base);
 }
 
 static inline void emit_scope(Generator* gen, Array <Instruction>* out)
@@ -296,7 +305,7 @@ static inline void emit_scope(Generator* gen, Array <Instruction>* out)
 		emit_statement(gen, out);
 	}
 
-	end_scope(gen);
+	end_scope(gen, out);
 }
 
 //
@@ -357,6 +366,7 @@ static inline void emit_var_statement(Generator* gen, Array <Instruction>* out)
 	emplace(out, INSTRUCTION_STORE_LOCAL, get_or_create_variable(gen, name));
 }
 
+// define <ident>(<ident>, <ident>...) { ... }
 static inline void emit_define_statement(Generator* gen, Array <Instruction>* out)
 {
 	// define
@@ -389,7 +399,7 @@ static inline void emit_define_statement(Generator* gen, Array <Instruction>* ou
 		// Check for (,<ident>
 		if (peek_token(gen, -1).type == TOKEN_OPEN_BRACE && peek_token(gen).type == TOKEN_COMMA)
 		{
-			error(gen, "Expected parameter after `(` in procedure definition, got `,`");
+			error(gen, "Expected argument after `(` in procedure definition, got `,`");
 		}
 
 		// <ident>
@@ -400,22 +410,22 @@ static inline void emit_define_statement(Generator* gen, Array <Instruction>* ou
 
 		if (variable_exists(gen, name))
 		{
-			error(gen, "Parameter/variable redefinition in procedure definition");
+			error(gen, "Argument/variable redefinition in procedure definition");
 		}
 
 		get_or_create_variable(gen, name);
 
-		proc->param_count++;
+		proc->arg_count++;
 
 		if (peek_token(gen).type != TOKEN_CLOSE_BRACE)
 		{
 			// ,
 			try_eat_token(gen, TOKEN_COMMA);
-	
+		
 			// Check for <ident>,)
 			if (peek_token(gen).type == TOKEN_CLOSE_BRACE)
 			{
-				error(gen, "Expected parameter after `,` in procedure call, got `)`");
+				error(gen, "Expected argument after `,` in procedure definition, got `)`");
 			}
 		}
 	}
@@ -424,9 +434,15 @@ static inline void emit_define_statement(Generator* gen, Array <Instruction>* ou
 	Token close = try_eat_token(gen, TOKEN_CLOSE_BRACE);
 
 	proc->scope = begin_scope(gen, out);
-	proc->scope->local_base = gen->variables.count - proc->param_count;
+
+	// Move the local index back to the first argument
+	proc->scope->local_base = gen->variables.count - proc->arg_count;
 
 	gen->current_procedure = proc;
+
+	// Save it, as we only know the last instruction after the
+	// end_scope(); 
+	Instruction* jump = emplace(out, INSTRUCTION_JUMP);
 
 	// { ... }
 	while (peek_token(gen).type != TOKEN_CLOSE_CURLY)
@@ -434,11 +450,19 @@ static inline void emit_define_statement(Generator* gen, Array <Instruction>* ou
 		emit_statement(gen, out);
 	}
 
-	end_scope(gen);
+	// If we didn't emit a `return`, return nothing. 
+	if (!proc->returns_value)
+	{
+		emplace(out, INSTRUCTION_LOAD_NULL);
+		emplace(out, INSTRUCTION_RET);
+	}
+
+	end_scope(gen, out);
+
+	// We know the last instruction now, jump here.
+	jump->arg = proc->scope->last_inst;
 
 	gen->current_procedure = nullptr;
-
-	errorln("TODO: define statement codegen");
 }
 
 // return <expr>
@@ -449,13 +473,17 @@ static inline void emit_return_statement(Generator* gen, Array <Instruction>* ou
 		error(gen, "Cannot use return outside procedure");
 	}
 
+	// At some point in the procedure we will return a value that's not UNDEFINED. 
+	// TODO: Might be an issue if you return in an if statement
+	gen->current_procedure->returns_value = true;
+
 	// return
 	Token return_ = eat_token(gen);
 
 	// <expr>
 	emit_expression(gen, out);
 
-	errorln("TODO: return statement codegen");
+	emplace(out, INSTRUCTION_RET);
 }
 
 static inline void emit_statement(Generator* gen, Array <Instruction>* out)
@@ -526,4 +554,7 @@ static inline void emit_program(Generator* gen, Array <Instruction>* out)
 	{
 		emit_statement(gen, out);
 	}
+
+	// Ensure we terminate the program at the end
+	emplace(out, INSTRUCTION_HALT);
 }

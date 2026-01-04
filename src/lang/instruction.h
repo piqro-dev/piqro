@@ -38,7 +38,7 @@ enum InstructionType : uint8_t
 struct Instruction
 {
 	InstructionType type;
-	uint16_t param;
+	uint16_t arg;
 };
 
 #undef INST

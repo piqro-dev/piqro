@@ -28,20 +28,26 @@ static inline Array <T> make_array(Arena* arena, size_t capacity)
 }
 
 template <typename T>
-static inline T* push(Array <T>* array, const T& v)
+static inline T* push(Array <T>* array, T v)
 {
+	ASSERT(array->count < array->capacity);
+
 	return &(array->elements[array->count++] = v);
 }
 
 template <typename T>
 static inline T* push(Array <T>* array)
 {
+	ASSERT(array->count < array->capacity);
+
 	return &array->elements[array->count++];
 }
 
 template <typename T, typename ... Args>
-static inline T* emplace(Array <T>* array, const Args& ... args)
+static inline T* emplace(Array <T>* array, Args ... args)
 {
+	ASSERT(array->count < array->capacity);
+
 	return &(array->elements[array->count++] = T{ args... });
 }
 
@@ -50,6 +56,19 @@ static inline T* pop(Array <T>* array)
 {
 	return &array->elements[--array->count];
 }
+
+template <typename T>
+static inline void trim_end(Array <T>* array, size_t from)
+{
+	array->count = from;
+}
+
+template <typename T>
+static inline T* remove(Array <T>* array, size_t at)
+{
+	return &array->elements[at] = *pop(array);
+}
+
 
 // Both begin() and end() need references to the type...
 
@@ -64,15 +83,3 @@ static inline T* end(Array <T>& array)
 {
 	return array.elements + array.count;
 }	
-
-template <typename T>
-static inline void trim_end(Array <T>* array, size_t from)
-{
-	array->count = from;
-}
-
-template <typename T>
-static inline T* remove(Array <T>* array, size_t at)
-{
-	return &array->elements[at] = *pop(array);
-}
