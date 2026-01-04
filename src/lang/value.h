@@ -178,5 +178,5 @@ static inline Value operator>=(const Value& l, const Value& r)
 
 static inline Value operator!(const Value& v)
 {
-	return !make_value(as_boolean(&v));
+	return make_value(!as_boolean(&v));
 }

@@ -37,14 +37,16 @@ static constexpr struct
 	const char*	name;
 } KEYWORDS[] =
 {
+	{ TOKEN_TRUE,    "true" },
+	{ TOKEN_FALSE,   "false" },
+
 	{ TOKEN_VAR,     "var" },
 	{ TOKEN_FOREVER, "forever" },
 	{ TOKEN_REPEAT,  "repeat" },
 	{ TOKEN_DEFINE,  "define" },
 	{ TOKEN_RETURN,  "return" },
-	
-	{ TOKEN_TRUE,    "true" },
-	{ TOKEN_FALSE,   "false" },
+	{ TOKEN_IF,      "if" },
+	{ TOKEN_ELSE,    "else" },
 };
 
 static inline Token parse_identifier(Tokenizer* tok)

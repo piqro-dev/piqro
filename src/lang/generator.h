@@ -28,7 +28,7 @@ struct Procedure
 	uint8_t arg_count;
 	bool returns_value;
 	
-	Scope* scope;
+	Scope scope;
 };
 
 struct Generator

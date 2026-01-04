@@ -83,3 +83,15 @@ static inline T* end(Array <T>& array)
 {
 	return array.elements + array.count;
 }	
+
+template <typename T>
+static inline T* begin(const Array <T>& array)
+{
+	return array.elements;	
+}
+
+template <typename T>
+static inline T* end(const Array <T>& array)
+{
+	return array.elements + array.count;
+}	

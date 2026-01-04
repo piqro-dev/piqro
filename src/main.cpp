@@ -9,12 +9,18 @@
 #include <lang/vm.h>
 
 static constexpr char src[] = 
-R"(
-define b() {
-	return 10
+R"( 
+var c = 0
+
+if c 
+{
+	c = 10
+} 
+else 
+{
+	c = 9
 }
-var a = b()
-var c = b()
+
 )";
 
 static Tokenizer tok;
@@ -25,7 +31,7 @@ static VM vm;
 
 static inline void print_tokens(Array <Token> tokens)
 {
-	println("\nToken:");
+	println("\nTokens:");
 
 	for (const Token& t : tokens)
 	{
@@ -34,11 +40,11 @@ static inline void print_tokens(Array <Token> tokens)
 		
 		if (t.type >= TOKEN_STRING && t.type <= TOKEN_IDENTIFIER)
 		{
-			println("\t%-15s %s", to_string(t.type), buf);
+			println("  %-15s %s", to_string(t.type), buf);
 		}
 		else
 		{
-			println("\t%-15s", to_string(t.type));
+			println("  %-15s", to_string(t.type));
 		}
 	}
 }
@@ -56,71 +62,76 @@ static inline void print_instructions(Array <Instruction> instructions)
 			char buf[128] = {};
 			as_string(&gen.immediates[it.arg], buf, 128);
 
-			println("\t[%d] %-20s %d (%s)", idx, to_string(it.type), it.arg, buf);
+			println("  [%d] %-20s %d (%s)", idx, to_string(it.type), it.arg, buf);
 		}
 		else if (it.type == INSTRUCTION_LOAD_LOCAL || it.type == INSTRUCTION_STORE_LOCAL)
 		{
-			println("\t[%d] %-20s %d (%s)", idx, to_string(it.type), it.arg, gen.variables[it.arg]);
+			println("  [%d] %-20s %d (%s)", idx, to_string(it.type), it.arg, gen.variables[it.arg]);
 		}
 		else
 		{
-			println("\t[%d] %-20s %d", idx, to_string(it.type), it.arg);
+			println("  [%d] %-20s %d", idx, to_string(it.type), it.arg);
 		}
 
 		idx++;
 	}
 }
 
-static inline void dump_stack(const VM* vm) 
+static inline void dump_state(const VM* vm) 
 {
-	println("Stack dump:");
+	println("  -----------");
+	println("  Stack dump:");
 	
 	if (vm->stack.count > 0)
 	{
-		for (size_t i = 0; i < vm->stack.count; i++)
+		for (uint16_t i = 0; i < vm->stack.count; i++)
 		{
 			char buf[128] = {};
 			as_string(&vm->stack[i], buf, 128);
 
-			println("\t%s", buf);
+			println("    %s", buf);
 		}
 	}
 	else
 	{
-		println("\tN/A");
+		println("    N/A");
 	}
+
+	println("\n  Locals dump:");
+	
+	CallFrame* cf = end(vm->call_frames);
+
+	if (vm->locals.count > 0)
+	{
+		for (uint16_t i = cf->local_base; i < vm->locals.count; i++)
+		{
+			char buf[128] = {};
+			as_string(&vm->stack[i], buf, 128);
+
+			println("    [%d] %s", i, buf);
+		}
+	}
+	else
+	{
+		println("    N/A");
+	}
+
+	println("");
 }
 
-static uint8_t arena_memory[128 * 1024];
-static Arena arena;
-
-extern "C" void mainCRTStartup()
+static inline void execute_program()
 {
-	arena = make_arena(arena_memory, sizeof(arena_memory));
-
-	init(&tok, src);
-
-	Array <Token> tokens = make_array<Token>(&arena, 1024);
-	tokenize(&tok, &tokens);
-	print_tokens(tokens);
-
-	init(&gen, &arena, src, tokens);
-
-	Array <Instruction> instructions = make_array<Instruction>(&arena, 1024);
-	emit_program(&gen, &instructions);
-	print_instructions(instructions);
-
-	init(&vm, &arena, instructions, gen.immediates);
-
 	println("\nExecution:");
 
 	while (true)
 	{
 		const Instruction i = vm.instructions[vm.ic]; 
 	
-		println("\t-> %-20s %d", to_string(i.type), i.arg);
+		println("  -> %-20s %d", to_string(i.type), i.arg);
 		
 		Trap r = execute(&vm);
+
+		dump_state(&vm);
 
 		if (r == TRAP_HALT_EXECUTION)
 		{
@@ -144,6 +155,31 @@ extern "C" void mainCRTStartup()
 			break;
 		}
 	}
+}
+
+static uint8_t arena_memory[128 * 1024];
+static Arena arena;
+
+extern "C" void mainCRTStartup()
+{
+	arena = make_arena(arena_memory, sizeof(arena_memory));
+
+	init(&tok, src);
+
+	Array <Token> tokens = make_array<Token>(&arena, 1024);
+	tokenize(&tok, &tokens);
+	print_tokens(tokens);
+
+	init(&gen, &arena, src, tokens);
+
+	Array <Instruction> instructions = make_array<Instruction>(&arena, 1024);
+	emit_program(&gen, &instructions);
+	print_instructions(instructions);
+
+	init(&vm, &arena, instructions, gen.immediates);
+	execute_program();
+
+	println("\nGenerated instructions' size in bytes = %llu", instructions.count * sizeof(Instruction));
 
 	exit(0);
 }
