@@ -48,6 +48,6 @@ struct Generator
 	uint16_t ptr;
 };
 
-static inline void init(Generator* gen, Arena* arena, const char* source, Array <Token> tokens);
+void init(Generator* gen, Arena* arena, const char* source, Array <Token> tokens);
 
-static inline void emit_program(Generator* gen, Array <Instruction>* out);
+void emit_program(Generator* gen, Array <Instruction>* out);

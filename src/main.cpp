@@ -8,35 +8,20 @@
 
 #include <lang/vm.h>
 
-static constexpr char src[] = 
-R"( 
-var c = 0
-
-if c 
-{
-	c = 10
-} 
-else 
-{
-	c = 9
-}
-
-)";
-
 static Tokenizer tok;
 
 static Generator gen;
 
 static VM vm;
 
-static inline void print_tokens(Array <Token> tokens)
+inline void print_tokens(Array <Token> tokens)
 {
 	println("\nTokens:");
 
 	for (const Token& t : tokens)
 	{
 		char buf[128] = {};
-		as_string(t, src, buf, 128);
+		as_string(t, tok.source, buf, 128);
 		
 		if (t.type >= TOKEN_STRING && t.type <= TOKEN_IDENTIFIER)
 		{
@@ -49,7 +34,7 @@ static inline void print_tokens(Array <Token> tokens)
 	}
 }
 
-static inline void print_instructions(Array <Instruction> instructions)
+inline void print_instructions(Array <Instruction> instructions)
 {
 	println("\nInstructions:");
 
@@ -75,19 +60,21 @@ static inline void print_instructions(Array <Instruction> instructions)
 
 		idx++;
 	}
+
+	println("\nGenerated instructions' size: %llu bytes", instructions.count * sizeof(Instruction));
 }
 
-static inline void dump_state(const VM* vm) 
+inline void dump_state() 
 {
 	println("  -----------");
 	println("  Stack dump:");
 	
-	if (vm->stack.count > 0)
+	if (vm.stack.count > 0)
 	{
-		for (uint16_t i = 0; i < vm->stack.count; i++)
+		for (uint16_t i = 0; i < vm.stack.count; i++)
 		{
 			char buf[128] = {};
-			as_string(&vm->stack[i], buf, 128);
+			as_string(&vm.stack[i], buf, 128);
 
 			println("    %s", buf);
 		}
@@ -99,14 +86,14 @@ static inline void dump_state(const VM* vm)
 
 	println("\n  Locals dump:");
 	
-	CallFrame* cf = end(vm->call_frames);
+	CallFrame* cf = end(vm.call_frames);
 
-	if (vm->locals.count > 0)
+	if (vm.locals.count > 0)
 	{
-		for (uint16_t i = cf->local_base; i < vm->locals.count; i++)
+		for (uint16_t i = cf->local_base; i < vm.locals.count; i++)
 		{
 			char buf[128] = {};
-			as_string(&vm->stack[i], buf, 128);
+			as_string(&vm.stack[i], buf, 128);
 
 			println("    [%d] %s", i, buf);
 		}
@@ -117,9 +104,10 @@ static inline void dump_state(const VM* vm)
 	}
 
 	println("");
+
 }
 
-static inline void execute_program()
+inline void execute_program()
 {
 	println("\nExecution:");
 
@@ -131,7 +119,7 @@ static inline void execute_program()
 		
 		Trap r = execute(&vm);
 
-		dump_state(&vm);
+		dump_state();
 
 		if (r == TRAP_HALT_EXECUTION)
 		{
@@ -160,17 +148,33 @@ static inline void execute_program()
 static uint8_t arena_memory[128 * 1024];
 static Arena arena;
 
+static constexpr char source[] = 
+R"( 
+var c = true
+
+if false {
+	c = 999
+} else if false {
+	c = 420
+} else if false {
+	c = 10
+} else {
+	c = 3
+}
+
+)";
+
 extern "C" void mainCRTStartup()
 {
 	arena = make_arena(arena_memory, sizeof(arena_memory));
 
-	init(&tok, src);
+	init(&tok, source);
 
 	Array <Token> tokens = make_array<Token>(&arena, 1024);
 	tokenize(&tok, &tokens);
 	print_tokens(tokens);
 
-	init(&gen, &arena, src, tokens);
+	init(&gen, &arena, source, tokens);
 
 	Array <Instruction> instructions = make_array<Instruction>(&arena, 1024);
 	emit_program(&gen, &instructions);
@@ -179,7 +183,7 @@ extern "C" void mainCRTStartup()
 	init(&vm, &arena, instructions, gen.immediates);
 	execute_program();
 
-	println("\nGenerated instructions' size in bytes = %llu", instructions.count * sizeof(Instruction));
+	println("Arena usage: %.2f kb out of %.2f kb", (arena.offset - arena.buffer) * 0.001f, arena.capacity * 0.001f);
 
 	exit(0);
 }

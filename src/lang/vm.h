@@ -44,6 +44,6 @@ struct VM
 	uint16_t ic;
 };
 
-static inline void init(VM* vm, Arena* arena, Array <Instruction> instructions, Array <Value> immediates);
+void init(VM* vm, Arena* arena, Array <Instruction> instructions, Array <Value> immediates);
 
-static inline Trap execute(VM* vm);
+Trap execute(VM* vm);

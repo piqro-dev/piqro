@@ -49,7 +49,7 @@ struct Token
 #undef TOKEN
 #define TOKEN(name, fancy_name) case TOKEN_##name: return fancy_name;
 
-static inline const char* to_string(const TokenType type)
+inline const char* to_string(const TokenType type)
 {
 	switch (type)
 	{
@@ -59,17 +59,17 @@ static inline const char* to_string(const TokenType type)
 	return "unknown";
 }
 
-static inline void as_string(Token t, const char* src, char* out, size_t n)
+inline void as_string(Token t, const char* src, char* out, size_t n)
 {
 	__builtin_snprintf(out, __builtin_elementwise_min(t.end - t.start + 1, static_cast<uint32_t>(n)), "%s", src + t.start);
 }
 
-static inline bool is_binary_op(const TokenType type)
+inline bool is_binary_op(const TokenType type)
 {
 	return type >= TOKEN_PLUS && type <= TOKEN_STAR;
 }
 
-static inline uint8_t precedence_of(const TokenType type)
+inline uint8_t precedence_of(const TokenType type)
 {
 	switch (type)
 	{

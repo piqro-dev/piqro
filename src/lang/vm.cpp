@@ -12,7 +12,7 @@
 		return TRAP_STACK_UNDERFLOW; \
 	}
 
-static inline Trap LOAD_IMMEDIATE(VM* vm, uint16_t idx)
+inline Trap LOAD_IMMEDIATE(VM* vm, uint16_t idx)
 {
 	if (idx > vm->immediates.count)
 	{
@@ -26,7 +26,7 @@ static inline Trap LOAD_IMMEDIATE(VM* vm, uint16_t idx)
 	return TRAP_SUCCESS;
 }
 
-static inline Trap LOAD_LOCAL(VM* vm, uint16_t idx)
+inline Trap LOAD_LOCAL(VM* vm, uint16_t idx)
 {
 	if (idx >= MAX_VARIABLES)
 	{
@@ -40,7 +40,7 @@ static inline Trap LOAD_LOCAL(VM* vm, uint16_t idx)
 	return TRAP_SUCCESS;
 }
 
-static inline Trap STORE_LOCAL(VM* vm, uint16_t idx)
+inline Trap STORE_LOCAL(VM* vm, uint16_t idx)
 {
 	if (idx > MAX_VARIABLES)
 	{
@@ -56,7 +56,7 @@ static inline Trap STORE_LOCAL(VM* vm, uint16_t idx)
 
 // TODO: Load proc
 
-static inline Trap LOAD_NULL(VM* vm)
+inline Trap LOAD_NULL(VM* vm)
 {
 	VERIFY_STACK_OVERFLOW();
 
@@ -81,7 +81,7 @@ static inline Trap LOAD_NULL(VM* vm)
 	OP(LESS, <)
 
 #define OP(name, op) \
-	static inline Trap name(VM* vm) \
+	inline Trap name(VM* vm) \
 	{ \
 		VERIFY_STACK_UNDERFLOW(); \
 		\
@@ -100,7 +100,7 @@ static inline Trap LOAD_NULL(VM* vm)
 
 DEFINE_OPS
 
-static inline Trap NOT(VM* vm)
+inline Trap NOT(VM* vm)
 {
 	VERIFY_STACK_UNDERFLOW();
 
@@ -113,7 +113,7 @@ static inline Trap NOT(VM* vm)
 	return TRAP_SUCCESS;
 }
 
-static inline Trap CALL(VM* vm, uint16_t idx)
+inline Trap CALL(VM* vm, uint16_t idx)
 {
 	if (vm->call_frames.count >= MAX_STACK_SIZE)
 	{
@@ -144,7 +144,7 @@ static inline Trap CALL(VM* vm, uint16_t idx)
 	return TRAP_SUCCESS;
 }
 
-static inline Trap RET(VM* vm)
+inline Trap RET(VM* vm)
 {
 	const CallFrame* cf = pop(&vm->call_frames);
 
@@ -166,7 +166,7 @@ static inline Trap RET(VM* vm)
 	return TRAP_SUCCESS;
 }
 
-static inline Trap JUMP(VM* vm, uint16_t to)
+inline Trap JUMP(VM* vm, uint16_t to)
 {
 	if (to > vm->instructions.count)
 	{
@@ -178,7 +178,7 @@ static inline Trap JUMP(VM* vm, uint16_t to)
 	return TRAP_SUCCESS;
 }
 
-static inline Trap JUMP_COND(VM* vm, uint16_t to)
+inline Trap JUMP_COND(VM* vm, uint16_t to)
 {
 	if (to > vm->instructions.count)
 	{
@@ -201,7 +201,7 @@ static inline Trap JUMP_COND(VM* vm, uint16_t to)
 // Public
 //
 
-static inline void init(VM* vm, Arena* arena, const Array <Instruction> instructions, const Array <Value> immediates)
+void init(VM* vm, Arena* arena, const Array <Instruction> instructions, const Array <Value> immediates)
 {
 	vm->instructions = instructions;
 	vm->immediates = immediates;
@@ -213,7 +213,7 @@ static inline void init(VM* vm, Arena* arena, const Array <Instruction> instruct
 	vm->ic = 0;
 }
 
-static inline Trap execute(VM* vm)
+Trap execute(VM* vm)
 {
 	Trap r = TRAP_SUCCESS;
 

@@ -1,14 +1,14 @@
 
 #include <lang/generator.h>
 
-static inline bool identifier_too_long(Token t)
+inline bool identifier_too_long(Token t)
 {
 	ASSERT(t.type == TOKEN_IDENTIFIER);
 
 	return t.end - t.start - 1 > MAX_IDENTIFIER_NAME_LENGTH;
 }
 
-static inline Token peek_token(const Generator* gen, int16_t offset = 0)
+inline Token peek_token(const Generator* gen, int16_t offset = 0)
 {
 	if (gen->ptr + offset > gen->tokens.count)
 	{
@@ -18,7 +18,7 @@ static inline Token peek_token(const Generator* gen, int16_t offset = 0)
 	return gen->tokens[gen->ptr + offset];
 }
 
-static inline Token eat_token(Generator* gen)
+inline Token eat_token(Generator* gen)
 {
 	Token t = gen->tokens[gen->ptr++];
 
@@ -28,7 +28,7 @@ static inline Token eat_token(Generator* gen)
 }
 
 __attribute__((format(printf, 2, 3)))
-static inline void error(const Generator* gen, const char* fmt, ...)
+inline void error(const Generator* gen, const char* fmt, ...)
 {
 	__builtin_va_list args;
 
@@ -41,7 +41,7 @@ static inline void error(const Generator* gen, const char* fmt, ...)
 	errorln("Error: line %d: %s", gen->line, out);
 }
 
-static inline Token try_eat_token(Generator* gen, TokenType expected)
+inline Token try_eat_token(Generator* gen, TokenType expected)
 {
 	const Token peek = peek_token(gen);
 
@@ -53,7 +53,7 @@ static inline Token try_eat_token(Generator* gen, TokenType expected)
 	return gen->tokens[gen->ptr++];
 }
 
-static inline bool variable_exists(const Generator* gen, const char* name)
+inline bool variable_exists(const Generator* gen, const char* name)
 {
 	for (uint16_t i = 0; i < gen->variables.count; i++)
 	{
@@ -66,7 +66,7 @@ static inline bool variable_exists(const Generator* gen, const char* name)
 	return false;
 }
 
-static inline bool procedure_exists(const Generator* gen, const char* name)
+inline bool procedure_exists(const Generator* gen, const char* name)
 {
 	for (uint16_t i = 0; i < gen->procedures.count; i++)
 	{
@@ -79,7 +79,7 @@ static inline bool procedure_exists(const Generator* gen, const char* name)
 	return false;
 }
 
-static inline Procedure* get_or_create_procedure(Generator* gen, const char* name)
+inline Procedure* get_or_create_procedure(Generator* gen, const char* name)
 {
 	for (uint16_t i = 0; i < gen->procedures.count; i++)
 	{
@@ -95,7 +95,7 @@ static inline Procedure* get_or_create_procedure(Generator* gen, const char* nam
 	return proc;
 }
 
-static inline uint16_t get_or_create_variable(Generator* gen, const char* name)
+inline uint16_t get_or_create_variable(Generator* gen, const char* name)
 {
 	for (uint16_t i = 0; i < gen->variables.count; i++)
 	{
@@ -110,7 +110,7 @@ static inline uint16_t get_or_create_variable(Generator* gen, const char* name)
 	return gen->variables.count - 1;
 }
 
-static inline uint16_t get_or_create_immediate(Generator* gen, Value v)
+inline uint16_t get_or_create_immediate(Generator* gen, Value v)
 {
 	for (uint16_t i = 0; i < gen->immediates.count; i++)
 	{
@@ -125,15 +125,15 @@ static inline uint16_t get_or_create_immediate(Generator* gen, Value v)
 	return gen->immediates.count - 1;
 }
 
-static inline void emit_expression(Generator* gen, Array <Instruction>* out);
+inline void emit_expression(Generator* gen, Array <Instruction>* out);
 
-static inline void emit_statement(Generator* gen, Array <Instruction>* out);
+inline void emit_statement(Generator* gen, Array <Instruction>* out);
 
 //
 // Expressions
 //
 
-static inline void emit_number_expression(Generator* gen, Array <Instruction>* out)
+inline void emit_number_expression(Generator* gen, Array <Instruction>* out)
 {
 	Token number = eat_token(gen);
 
@@ -146,7 +146,7 @@ static inline void emit_number_expression(Generator* gen, Array <Instruction>* o
 	emplace(out, INSTRUCTION_LOAD_IMMEDIATE, get_or_create_immediate(gen, imm));
 }
 
-static inline void emit_identifier_expression(Generator* gen, Array <Instruction>* out)
+inline void emit_identifier_expression(Generator* gen, Array <Instruction>* out)
 {
 	Token ident = eat_token(gen);
 
@@ -161,7 +161,7 @@ static inline void emit_identifier_expression(Generator* gen, Array <Instruction
 	emplace(out, INSTRUCTION_LOAD_LOCAL, get_or_create_variable(gen, name));
 }
 
-static inline void emit_boolean_expression(Generator* gen, Array <Instruction>* out)
+inline void emit_boolean_expression(Generator* gen, Array <Instruction>* out)
 {
 	Token boolean = eat_token(gen);
 
@@ -176,21 +176,20 @@ static inline void emit_boolean_expression(Generator* gen, Array <Instruction>* 
 }
 
 // <ident>(<expr>, <expr>...)
-static inline void emit_procedure_expression(Generator* gen, Array <Instruction>* out)
+inline void emit_procedure_expression(Generator* gen, Array <Instruction>* out)
 {
 	Token ident = eat_token(gen);
 
 	Identifier name = {};
 	as_string(ident, gen->source, name, 256);
 
-	// May not exist
 	if (!procedure_exists(gen, name))
 	{
 		error(gen, "Undefined procedure '%s'", name);
 	}
 
 	// (
-	Token open = eat_token(gen);
+	eat_token(gen);
 
 	uint8_t arg_count = 0; 
 
@@ -229,7 +228,7 @@ static inline void emit_procedure_expression(Generator* gen, Array <Instruction>
 	}
 
 	// )
-	Token close = try_eat_token(gen, TOKEN_CLOSE_BRACE);
+	try_eat_token(gen, TOKEN_CLOSE_BRACE);
 
 	// Push the argument count to be the last
 	emplace(out, INSTRUCTION_LOAD_IMMEDIATE, get_or_create_immediate(gen, make_value((float)proc->arg_count)));
@@ -238,13 +237,37 @@ static inline void emit_procedure_expression(Generator* gen, Array <Instruction>
 	emplace(out, INSTRUCTION_CALL, proc->scope.first_inst);
 }
 
+// <ident> = <expr>
+inline void emit_assign_expression(Generator* gen, Array <Instruction>* out) 
+{
+	// <ident> 
+	Token ident = eat_token(gen);
+
+	Identifier name = {};
+	as_string(ident, gen->source, name, 256);
+
+	if (!variable_exists(gen, name)) 
+	{
+		error(gen, "Undefined identifier '%s'", name);
+	}
+
+	// =
+	try_eat_token(gen, TOKEN_EQUALS);
+
+	// <expr>
+	emit_expression(gen, out);
+
+	emplace(out, INSTRUCTION_STORE_LOCAL, get_or_create_variable(gen, name));
+	emplace(out, INSTRUCTION_LOAD_LOCAL, get_or_create_variable(gen, name));
+}
+
 // <expr> <op> <expr>
-static inline void emit_binary_expression(Generator* gen, Array <Instruction>* out, uint8_t min_precedence = 0)
+inline void emit_binary_expression(Generator* gen, Array <Instruction>* out, uint8_t min_precedence = 0)
 {
 	error(gen, "TODO: Binary expressions are not implemented");
 }
 
-static inline void emit_expression(Generator* gen, Array <Instruction>* out)
+inline void emit_expression(Generator* gen, Array <Instruction>* out)
 {
 	Token expr = peek_token(gen);
 
@@ -258,6 +281,10 @@ static inline void emit_expression(Generator* gen, Array <Instruction>* out)
 		{
 			emit_procedure_expression(gen, out);
 		}
+		else if (peek_token(gen, 1).type == TOKEN_EQUALS)
+		{
+			emit_assign_expression(gen, out);
+		}
 		else
 		{
 			emit_identifier_expression(gen, out);
@@ -269,7 +296,7 @@ static inline void emit_expression(Generator* gen, Array <Instruction>* out)
 	}
 	else
 	{
-		error(gen, "Expected expression");
+		error(gen, "Expected expression, got %s", to_string(expr.type));
 	}
 
 	// Do binary expressions here to avoid infinite recursion.	
@@ -283,10 +310,10 @@ static inline void emit_expression(Generator* gen, Array <Instruction>* out)
 // Scope
 //
 
-static inline Scope* begin_scope(Generator* gen, Array <Instruction>* out) 
+inline Scope* begin_scope(Generator* gen, Array <Instruction>* out) 
 {
 	// {
-	Token open = try_eat_token(gen, TOKEN_OPEN_CURLY);
+	try_eat_token(gen, TOKEN_OPEN_CURLY);
 
 	Scope* scope = push(&gen->scopes);
 
@@ -296,10 +323,10 @@ static inline Scope* begin_scope(Generator* gen, Array <Instruction>* out)
 	return scope;
 }
 
-static inline void end_scope(Generator* gen, Array <Instruction>* out) 
+inline void end_scope(Generator* gen, Array <Instruction>* out) 
 {
 	// }
-	Token close = try_eat_token(gen, TOKEN_CLOSE_CURLY);
+	try_eat_token(gen, TOKEN_CLOSE_CURLY);
 
 	Scope* scope = pop(&gen->scopes);
 
@@ -308,7 +335,7 @@ static inline void end_scope(Generator* gen, Array <Instruction>* out)
 	trim_end(&gen->variables, scope->local_base);
 }
 
-static inline void emit_scope(Generator* gen, Array <Instruction>* out)
+inline void emit_scope(Generator* gen, Array <Instruction>* out)
 {
 	begin_scope(gen, out);
 
@@ -324,34 +351,11 @@ static inline void emit_scope(Generator* gen, Array <Instruction>* out)
 // Statements
 //
 
-// <ident> = <expr>
-static inline void emit_assign_statement(Generator* gen, Array <Instruction>* out)
-{
-	// <ident> 
-	Token ident = eat_token(gen);
-
-	Identifier name = {};
-	as_string(ident, gen->source, name, 256);
-
-	if (!variable_exists(gen, name)) 
-	{
-		error(gen, "Undefined identifier '%s'", name);
-	}
-
-	// =
-	Token eq = try_eat_token(gen, TOKEN_EQUALS);
-
-	// <expr>
-	emit_expression(gen, out);
-
-	emplace(out, INSTRUCTION_STORE_LOCAL, get_or_create_variable(gen, name));
-}
-
 // var <ident> = <expr>
-static inline void emit_var_statement(Generator* gen, Array <Instruction>* out)
+inline void emit_var_statement(Generator* gen, Array <Instruction>* out)
 {
 	// var
-	Token var = eat_token(gen);
+	eat_token(gen);
 	
 	// <ident>
 	Token ident = try_eat_token(gen, TOKEN_IDENTIFIER);
@@ -379,10 +383,10 @@ static inline void emit_var_statement(Generator* gen, Array <Instruction>* out)
 }
 
 // define <ident>(<ident>, <ident>...) { ... }
-static inline void emit_define_statement(Generator* gen, Array <Instruction>* out)
+inline void emit_define_statement(Generator* gen, Array <Instruction>* out)
 {
 	// define
-	Token define = eat_token(gen);
+	eat_token(gen);
 
 	if (gen->current_procedure)
 	{
@@ -443,7 +447,7 @@ static inline void emit_define_statement(Generator* gen, Array <Instruction>* ou
 	}
 
 	// )
-	Token close = try_eat_token(gen, TOKEN_CLOSE_BRACE);
+	try_eat_token(gen, TOKEN_CLOSE_BRACE);
 
 	Scope* scope = begin_scope(gen, out);
 
@@ -480,7 +484,7 @@ static inline void emit_define_statement(Generator* gen, Array <Instruction>* ou
 }
 
 // return <expr>
-static inline void emit_return_statement(Generator* gen, Array <Instruction>* out)
+inline void emit_return_statement(Generator* gen, Array <Instruction>* out)
 {
 	if (!gen->current_procedure)
 	{
@@ -488,11 +492,11 @@ static inline void emit_return_statement(Generator* gen, Array <Instruction>* ou
 	}
 
 	// At some point in the procedure we will return a value that's not UNDEFINED. 
-	// NOTE: Might be an issue if you don't return a value in every path
+	// NOTE: Might be an issue if a value is not returned every path
 	gen->current_procedure->returns_value = true;
 
 	// return
-	Token return_ = eat_token(gen);
+	eat_token(gen);
 
 	// <expr>
 	emit_expression(gen, out);
@@ -510,10 +514,10 @@ static inline void emit_return_statement(Generator* gen, Array <Instruction>* ou
 //   <...>
 // }
 // 
-static inline void emit_repeat_statement(Generator* gen, Array <Instruction>* out)
+inline void emit_repeat_statement(Generator* gen, Array <Instruction>* out)
 {
 	// repeat
-	Token repeat = eat_token(gen);
+	eat_token(gen);
 
 	// <expr>
 	emit_expression(gen, out);
@@ -535,7 +539,7 @@ static inline void emit_repeat_statement(Generator* gen, Array <Instruction>* ou
 	emplace(out, INSTRUCTION_LOAD_IMMEDIATE, get_or_create_immediate(gen, make_value(0.0f)));
 	emplace(out, INSTRUCTION_LESS_THAN);
 
-	// True? Jump out from the loop
+	// True? Skip the loop
 	Instruction* jump_cond = emplace(out, INSTRUCTION_JUMP_COND);
 
 	// repeat_local = repeat_local - 1
@@ -557,10 +561,10 @@ static inline void emit_repeat_statement(Generator* gen, Array <Instruction>* ou
 }
 
 // forever { ... }
-static inline void emit_forever_statement(Generator* gen, Array <Instruction>* out)
+inline void emit_forever_statement(Generator* gen, Array <Instruction>* out)
 {
 	// forever
-	Token forever = eat_token(gen);
+	eat_token(gen);
 
 	// {
 	Scope* scope = begin_scope(gen, out);
@@ -578,11 +582,15 @@ static inline void emit_forever_statement(Generator* gen, Array <Instruction>* o
 	emplace(out, INSTRUCTION_JUMP, (uint16_t)(scope->first_inst - 1));
 }
 
-// if <expr> { ... } else { ... }
-static inline void emit_if_else_statement(Generator* gen, Array <Instruction>* out)
+inline void emit_else_if_statement(Generator* gen, Array <Instruction>* out, Scope last_scope);
+
+inline void emit_else_statement(Generator* gen, Array <Instruction>* out, Scope last_scope);
+
+// if <expr> { ... }
+inline void emit_if_statement(Generator* gen, Array <Instruction>* out)
 {
 	// if
-	Token if_ = eat_token(gen);
+	eat_token(gen);
 
 	// <expr>
 	emit_expression(gen, out);
@@ -595,7 +603,58 @@ static inline void emit_if_else_statement(Generator* gen, Array <Instruction>* o
 	Instruction* jump_cond = emplace(out, INSTRUCTION_JUMP_COND);
 
 	// {
-	Scope* if_scope = begin_scope(gen, out);
+	Scope* scope = begin_scope(gen, out);
+
+	// Statements
+	while (peek_token(gen).type != TOKEN_CLOSE_CURLY)
+	{
+		emit_statement(gen, out);
+	}
+ 
+	// }
+	end_scope(gen, out);
+
+	// This jumps to the end of this block if <expr> == false (therefore, not executing this block).
+	jump_cond->arg = scope->last_inst;
+
+	if (peek_token(gen).type == TOKEN_ELSE)
+	{
+		// These emit an additional jump at the beginning, in case this block ends up executing, so jump here instead.
+		if (peek_token(gen, 1).type == TOKEN_IF)
+		{
+			emit_else_if_statement(gen, out, *scope);
+			jump_cond->arg++;
+		}
+		else
+		{
+			emit_else_statement(gen, out, *scope);
+			jump_cond->arg++;
+		}
+	}
+}
+
+// else if <expr> { ... }
+inline void emit_else_if_statement(Generator* gen, Array <Instruction>* out, Scope last_scope) 
+{
+	// If the last block executes, this will skip this block.
+	Instruction* jump = emplace(out, INSTRUCTION_JUMP);
+
+	// else if
+	eat_token(gen);
+	eat_token(gen);
+
+	// <expr>
+	emit_expression(gen, out);
+
+	// <expr> == false?
+	emplace(out, INSTRUCTION_LOAD_IMMEDIATE, get_or_create_immediate(gen, make_value(false)));
+	emplace(out, INSTRUCTION_EQUALS);
+
+	// True? Skip the block.
+	Instruction* jump_cond = emplace(out, INSTRUCTION_JUMP_COND);
+
+	// {
+	Scope* scope = begin_scope(gen, out);
 
 	// Statements
 	while (peek_token(gen).type != TOKEN_CLOSE_CURLY)
@@ -606,37 +665,52 @@ static inline void emit_if_else_statement(Generator* gen, Array <Instruction>* o
 	// }
 	end_scope(gen, out);
 
-	jump_cond->arg = if_scope->last_inst;
+	// This jumps to the end of this block if the last block was executed. 
+	jump->arg = scope->last_inst;
 
-	// else 
+	// This jumps to the end of this block if <expr> == false (therefore, not executing this block).
+	jump_cond->arg = scope->last_inst;
+
 	if (peek_token(gen).type == TOKEN_ELSE)
 	{
-		// If the if block ends up being true and executed, jump over the else block.
-		Instruction* jump = emplace(out, INSTRUCTION_JUMP);
-
-		// Skip the jump
-		jump_cond->arg++;
-
-		// else
-		Token else_ = eat_token(gen);
-
-		// {
-		Scope* else_scope = begin_scope(gen, out);
-	
-		// Statements
-		while (peek_token(gen).type != TOKEN_CLOSE_CURLY)
+		// These emit an additional jump at the beginning, in case this block ends up executing, so jump here instead.
+		if (peek_token(gen, 1).type == TOKEN_IF)
 		{
-			emit_statement(gen, out);
+			emit_else_if_statement(gen, out, *scope);
+			jump_cond->arg++;
 		}
-	
-		// }
-		end_scope(gen, out);
-
-		jump->arg = else_scope->last_inst;
+		else
+		{
+			emit_else_statement(gen, out, *scope);
+			jump_cond->arg++;
+		}
 	}
 }
 
-static inline void emit_statement(Generator* gen, Array <Instruction>* out)
+// else { ... }
+inline void emit_else_statement(Generator* gen, Array <Instruction>* out, Scope last_scope) 
+{
+	Instruction* jump = emplace(out, INSTRUCTION_JUMP);
+
+	// else
+	eat_token(gen);
+
+	// {
+	Scope* scope = begin_scope(gen, out);
+
+	// Statements
+	while (peek_token(gen).type != TOKEN_CLOSE_CURLY)
+	{
+		emit_statement(gen, out);
+	}
+
+	// }
+	end_scope(gen, out);
+
+	jump->arg = scope->last_inst;
+}
+
+inline void emit_statement(Generator* gen, Array <Instruction>* out)
 {
 	// var <ident> = <expr>
 	if (peek_token(gen).type == TOKEN_VAR)
@@ -653,7 +727,8 @@ static inline void emit_statement(Generator* gen, Array <Instruction>* out)
 		// <ident> = <expr>
 		else 
 		{
-			emit_assign_statement(gen, out);
+			emit_assign_expression(gen, out);
+			pop(out); // Pop the LOAD_IMMEDIATE if this is a statement.
 		}
 	}
 	// define <ident>(...) { ... }
@@ -676,20 +751,28 @@ static inline void emit_statement(Generator* gen, Array <Instruction>* out)
 	{
 		emit_forever_statement(gen, out);
 	}
-	// if <expr> { ... } else { ... }
+	// if <expr> { ... } else if <expr> { ... } else { ... }
 	else if (peek_token(gen).type == TOKEN_IF)
 	{
-		emit_if_else_statement(gen, out);
+		emit_if_statement(gen, out);
+	}
+	// Both of these statements cannot exist without an if statement, so these are
+	// handled above. 
+	else if (peek_token(gen).type == TOKEN_ELSE)
+	{
+		if (peek_token(gen, 1).type == TOKEN_IF)
+		{
+			error(gen, "Expected if statement before else if.");
+		}
+		else
+		{
+			error(gen, "Expected if or else if statement before else.");
+		}
 	}
 	// { ... }
 	else if (peek_token(gen).type == TOKEN_OPEN_CURLY)
 	{
 		emit_scope(gen, out);
-	}
-	else if (peek_token(gen).type == TOKEN_ELSE)
-	{
-		// At this point we already know as this keyword is handled in emit_if_else_statement().
-		error(gen, "Expected if statement before else statement");
 	}
 	else
 	{
@@ -701,7 +784,7 @@ static inline void emit_statement(Generator* gen, Array <Instruction>* out)
 // Public code
 //
 
-static inline void init(Generator* gen, Arena* arena, const char* source, Array <Token> tokens)
+void init(Generator* gen, Arena* arena, const char* source, Array <Token> tokens)
 {
 	gen->source = source;
 
@@ -718,7 +801,7 @@ static inline void init(Generator* gen, Arena* arena, const char* source, Array 
 	gen->ptr = 0;
 }
 
-static inline void emit_program(Generator* gen, Array <Instruction>* out)
+void emit_program(Generator* gen, Array <Instruction>* out)
 {
 	while (gen->ptr < gen->tokens.count)
 	{

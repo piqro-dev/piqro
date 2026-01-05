@@ -2,7 +2,7 @@
 
 #include <lang/tokenizer.h>
 
-static inline char peek_char(const Tokenizer* tok, int16_t offset = 0) 
+inline char peek_char(const Tokenizer* tok, int16_t offset = 0) 
 {
 	if (tok->ptr + offset > __builtin_strlen(tok->source)) 
 	{
@@ -12,13 +12,13 @@ static inline char peek_char(const Tokenizer* tok, int16_t offset = 0)
 	return tok->source[tok->ptr + offset];
 }
 
-static inline char eat_char(Tokenizer* tok)
+inline char eat_char(Tokenizer* tok)
 {
 	return tok->source[tok->ptr++];
 }
 
 __attribute__((format(printf, 2, 3)))
-static inline void error(const Tokenizer* tok, const char* fmt, ...)
+inline void error(const Tokenizer* tok, const char* fmt, ...)
 {
 	__builtin_va_list args;
 
@@ -49,7 +49,7 @@ static constexpr struct
 	{ TOKEN_ELSE,    "else" },
 };
 
-static inline Token parse_identifier(Tokenizer* tok)
+inline Token parse_identifier(Tokenizer* tok)
 {
 	Token t = {};
 	
@@ -87,7 +87,7 @@ static inline Token parse_identifier(Tokenizer* tok)
 	return t;
 }
 
-static inline Token parse_number(Tokenizer* tok)
+inline Token parse_number(Tokenizer* tok)
 {
 	Token t = {};
 
@@ -134,7 +134,7 @@ static inline Token parse_number(Tokenizer* tok)
 	return t;
 }
 
-static inline Token parse_string(Tokenizer* tok)
+inline Token parse_string(Tokenizer* tok)
 {
 	Token t = {};
 
@@ -157,14 +157,14 @@ static inline Token parse_string(Tokenizer* tok)
 	return t;
 }
 
-static inline void init(Tokenizer* tok, const char* source)
+void init(Tokenizer* tok, const char* source)
 {
 	tok->source = source;
 	tok->line = 1;
 	tok->ptr = 0;
 }
 
-static inline void tokenize(Tokenizer* tok, Array <Token>* out)
+void tokenize(Tokenizer* tok, Array <Token>* out)
 {
 	const size_t source_length = __builtin_strlen(tok->source);
 
