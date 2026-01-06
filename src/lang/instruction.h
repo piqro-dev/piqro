@@ -12,6 +12,7 @@
 	INST(SUB) \
 	INST(DIV) \
 	INST(MUL) \
+	INST(MOD) \
 	INST(AND) \
 	INST(OR) \
 	INST(GREATER_THAN) \

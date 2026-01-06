@@ -15,7 +15,7 @@
 struct CallFrame
 {
 	uint16_t return_ic;
-	uint16_t arg_count;
+	uint8_t arg_count;
 	uint16_t stack_base;
 	uint16_t local_base;
 };
@@ -34,9 +34,6 @@ struct VM
 {
 	Array <Instruction> instructions;
 	Array <Value> immediates;
-
-	Value variables[MAX_VARIABLES];
-
 	Array <Value> locals;
 	Array <Value> stack;
 	Array <CallFrame> call_frames;

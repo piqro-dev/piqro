@@ -47,6 +47,7 @@ static constexpr struct
 	{ TOKEN_RETURN,  "return" },
 	{ TOKEN_IF,      "if" },
 	{ TOKEN_ELSE,    "else" },
+	{ TOKEN_BREAK,   "break" },
 };
 
 inline Token parse_identifier(Tokenizer* tok)
@@ -183,22 +184,79 @@ void tokenize(Tokenizer* tok, Array <Token>* out)
 				eat_char(tok);
 			} break;
 
+			case '<':
+			{
+				eat_char(tok);
+
+				if (peek_char(tok) == '=')
+				{
+					eat_char(tok);
+					emplace(out, TOKEN_LESS_THAN, tok->line);	
+				}
+				else
+				{
+					emplace(out, TOKEN_LESS, tok->line);	
+				}
+			} break;
+
+			case '>':
+			{
+				eat_char(tok);
+
+				if (peek_char(tok) == '=')
+				{
+					eat_char(tok);
+					emplace(out, TOKEN_GREATER_THAN, tok->line);	
+				}
+				else
+				{
+					emplace(out, TOKEN_GREATER, tok->line);	
+				}
+			} break;
+
+			case '%':
+			{
+				eat_char(tok);
+
+				if (peek_char(tok) == '=')
+				{
+					eat_char(tok);
+					emplace(out, TOKEN_PERCENT_EQUALS, tok->line);	
+				}
+				else
+				{
+					emplace(out, TOKEN_PERCENT, tok->line);		
+				}
+			} break;
+
 			case '+':
 			{
-				emplace(out, TOKEN_PLUS, tok->line, tok->ptr, tok->ptr + 1);	
 				eat_char(tok);
+
+				if (peek_char(tok) == '=')
+				{
+					eat_char(tok);
+					emplace(out, TOKEN_PLUS_EQUALS, tok->line);	
+				}
+				else
+				{
+					emplace(out, TOKEN_PLUS, tok->line);		
+				}
 			} break;
 
 			case '-':
 			{
-				emplace(out, TOKEN_DASH, tok->line, tok->ptr, tok->ptr + 1);	
 				eat_char(tok);
-			} break;
 
-			case '*':
-			{
-				emplace(out, TOKEN_STAR, tok->line, tok->ptr, tok->ptr + 1);	
-				eat_char(tok);
+				if (peek_char(tok) == '=')
+				{
+					eat_char(tok);
+					emplace(out, TOKEN_DASH_EQUALS, tok->line);	
+				}
+				else
+				{
+					emplace(out, TOKEN_DASH, tok->line);		
+				}
 			} break;
 
 			case '/':
@@ -213,46 +271,107 @@ void tokenize(Tokenizer* tok, Array <Token>* out)
 						eat_char(tok);
 					}
 				}
+				else if (peek_char(tok) == '=')
+				{
+					eat_char(tok);
+					emplace(out, TOKEN_SLASH_EQUALS, tok->line);	
+				}
 				else
 				{
-					emplace(out, TOKEN_SLASH, tok->line, tok->ptr, tok->ptr + 1);	
+					emplace(out, TOKEN_SLASH, tok->line);	
 				}
+			} break;
 
+			case '*':
+			{
+				eat_char(tok);
+
+				if (peek_char(tok) == '=')
+				{
+					eat_char(tok);
+					emplace(out, TOKEN_STAR_EQUALS, tok->line);	
+				}
+				else
+				{
+					emplace(out, TOKEN_STAR, tok->line);		
+				}
+			} break;
+
+			case '!':
+			{
+				eat_char(tok);
+
+				if (peek_char(tok) == '=')
+				{
+					eat_char(tok);
+					emplace(out, TOKEN_NOT_EQUALS, tok->line);	
+				}
+				else
+				{
+					emplace(out, TOKEN_EXCLAMATION, tok->line);	
+				}
 			} break;
 
 			case '=':
 			{
-				emplace(out, TOKEN_EQUALS, tok->line, tok->ptr, tok->ptr + 1);	
 				eat_char(tok);
+
+				if (peek_char(tok) == '=')
+				{
+					eat_char(tok);
+					emplace(out, TOKEN_DOUBLE_EQUALS, tok->line);	
+				}
+				else
+				{
+					emplace(out, TOKEN_EQUALS, tok->line);	
+				}
+			} break;
+
+			case '&':
+			{
+				if (peek_char(tok) == '&')
+				{
+					eat_char(tok);
+					emplace(out, TOKEN_DOUBLE_AND, tok->line);	
+				}
+			} break;
+
+			case '|':
+			{
+				if (peek_char(tok) == '|')
+				{
+					eat_char(tok);
+					emplace(out, TOKEN_DOUBLE_PIPE, tok->line);	
+				}
 			} break;
 
 			case '{':
 			{
-				emplace(out, TOKEN_OPEN_CURLY, tok->line, tok->ptr, tok->ptr + 1);
+				emplace(out, TOKEN_OPEN_CURLY, tok->line);
 				eat_char(tok);
 			} break;
 
 			case '}':
 			{
-				emplace(out, TOKEN_CLOSE_CURLY, tok->line, tok->ptr, tok->ptr + 1);
+				emplace(out, TOKEN_CLOSE_CURLY, tok->line);
 				eat_char(tok);
 			} break;
 
 			case '(':
 			{
-				emplace(out, TOKEN_OPEN_BRACE, tok->line, tok->ptr, tok->ptr + 1);
+				emplace(out, TOKEN_OPEN_BRACE, tok->line);
 				eat_char(tok);
 			} break;
 
 			case ')':
 			{
-				emplace(out, TOKEN_CLOSE_BRACE, tok->line, tok->ptr, tok->ptr + 1);		
+				emplace(out, TOKEN_CLOSE_BRACE, tok->line);		
 				eat_char(tok);
 			} break;
 
 			case ',':
 			{
-				emplace(out, TOKEN_COMMA, tok->line, tok->ptr, tok->ptr + 1);		
+				emplace(out, TOKEN_COMMA, tok->line);		
 				eat_char(tok);
 			} break;
 

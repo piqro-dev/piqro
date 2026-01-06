@@ -47,15 +47,15 @@ inline void print_instructions(Array <Instruction> instructions)
 			char buf[128] = {};
 			as_string(&gen.immediates[it.arg], buf, 128);
 
-			println("  [%d] %-20s %d (%s)", idx, to_string(it.type), it.arg, buf);
+			println("  %-4d | %-20s %d (%s)", idx, to_string(it.type), it.arg, buf);
 		}
 		else if (it.type == INSTRUCTION_LOAD_LOCAL || it.type == INSTRUCTION_STORE_LOCAL)
 		{
-			println("  [%d] %-20s %d (%s)", idx, to_string(it.type), it.arg, gen.variables[it.arg]);
+			println("  %-4d | %-20s %d (%s)", idx, to_string(it.type), it.arg, gen.variables[it.arg]);
 		}
 		else
 		{
-			println("  [%d] %-20s %d", idx, to_string(it.type), it.arg);
+			println("  %-4d | %-20s %d", idx, to_string(it.type), it.arg);
 		}
 
 		idx++;
@@ -76,7 +76,7 @@ inline void dump_state()
 			char buf[128] = {};
 			as_string(&vm.stack[i], buf, 128);
 
-			println("    %s", buf);
+			println("    [%d] %s", i, buf);
 		}
 	}
 	else
@@ -115,7 +115,7 @@ inline void execute_program()
 	{
 		const Instruction i = vm.instructions[vm.ic]; 
 	
-		println("  -> %-20s %d", to_string(i.type), i.arg);
+		println("  -> %-4d | %-20s %d", vm.ic, to_string(i.type), i.arg);
 		
 		Trap r = execute(&vm);
 
@@ -150,18 +150,17 @@ static Arena arena;
 
 static constexpr char source[] = 
 R"( 
-var c = true
-
-if false {
-	c = 999
-} else if false {
-	c = 420
-} else if false {
-	c = 10
-} else {
-	c = 3
+define fib(x) {
+	if x == 0 {
+		return 0
+	} else if x == 1 {
+		return 1
+	} else {
+		return fib(x - 1) + fib(x - 2)
+	}
 }
 
+var a = fib(6)
 )";
 
 extern "C" void mainCRTStartup()

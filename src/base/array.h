@@ -12,12 +12,12 @@ struct Array
 	size_t count = 0;
 	size_t capacity = 0;
 
-	inline T& operator[](size_t idx) { return elements[idx]; }
 	inline const T& operator[](size_t idx) const { return elements[idx]; }
+	inline T& operator[](size_t idx)             { return elements[idx]; }
 };
 
 template <typename T>
-static inline Array <T> make_array(Arena* arena, size_t capacity)
+inline Array <T> make_array(Arena* arena, size_t capacity)
 {
 	Array <T> array = {};
 
@@ -28,7 +28,7 @@ static inline Array <T> make_array(Arena* arena, size_t capacity)
 }
 
 template <typename T>
-static inline T* push(Array <T>* array, T v)
+inline T* push(Array <T>* array, T v)
 {
 	ASSERT(array->count < array->capacity);
 
@@ -36,7 +36,7 @@ static inline T* push(Array <T>* array, T v)
 }
 
 template <typename T>
-static inline T* push(Array <T>* array)
+inline T* push(Array <T>* array)
 {
 	ASSERT(array->count < array->capacity);
 
@@ -44,7 +44,7 @@ static inline T* push(Array <T>* array)
 }
 
 template <typename T, typename ... Args>
-static inline T* emplace(Array <T>* array, Args ... args)
+inline T* emplace(Array <T>* array, Args ... args)
 {
 	ASSERT(array->count < array->capacity);
 
@@ -52,46 +52,45 @@ static inline T* emplace(Array <T>* array, Args ... args)
 }
 
 template <typename T>
-static inline T* pop(Array <T>* array)
+inline T* pop(Array <T>* array)
 {
 	return &array->elements[--array->count];
 }
 
 template <typename T>
-static inline void trim_end(Array <T>* array, size_t from)
+inline void trim_end(Array <T>* array, size_t from)
 {
 	array->count = from;
 }
 
 template <typename T>
-static inline T* remove(Array <T>* array, size_t at)
+inline T* remove(Array <T>* array, size_t at)
 {
 	return &array->elements[at] = *pop(array);
 }
 
-
 // Both begin() and end() need references to the type...
 
 template <typename T>
-static inline T* begin(Array <T>& array)
+inline T* begin(Array <T>& array)
 {
 	return array.elements;	
 }
 
 template <typename T>
-static inline T* end(Array <T>& array)
+inline T* end(Array <T>& array)
 {
 	return array.elements + array.count;
 }	
 
 template <typename T>
-static inline T* begin(const Array <T>& array)
+inline T* begin(const Array <T>& array)
 {
 	return array.elements;	
 }
 
 template <typename T>
-static inline T* end(const Array <T>& array)
+inline T* end(const Array <T>& array)
 {
 	return array.elements + array.count;
 }	

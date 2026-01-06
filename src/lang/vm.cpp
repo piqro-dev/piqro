@@ -35,21 +35,29 @@ inline Trap LOAD_LOCAL(VM* vm, uint16_t idx)
 
 	VERIFY_STACK_OVERFLOW();
 
-	push(&vm->stack, vm->variables[idx]);
+	push(&vm->stack, vm->locals[idx]);
 
 	return TRAP_SUCCESS;
 }
 
 inline Trap STORE_LOCAL(VM* vm, uint16_t idx)
 {
-	if (idx > MAX_VARIABLES)
+	if (idx > MAX_VARIABLES || vm->locals.count < idx)
 	{
 		return TRAP_OUT_OF_BOUNDS;
 	}
 
 	VERIFY_STACK_UNDERFLOW();
 
-	vm->variables[idx] = *pop(&vm->stack);
+	if (vm->locals.count <= idx)
+	{
+		push(&vm->locals, *pop(&vm->stack));
+	}
+	else
+	{
+		vm->locals[idx] = *pop(&vm->stack);
+	}
+
 
 	return TRAP_SUCCESS;
 }
@@ -72,6 +80,7 @@ inline Trap LOAD_NULL(VM* vm)
 	OP(SUB, -) \
 	OP(DIV, /) \
 	OP(MUL, *) \
+	OP(MOD, %) \
 	OP(AND, &&) \
 	OP(OR, ||) \
 	OP(GREATER_THAN, >=) \
@@ -126,13 +135,13 @@ inline Trap CALL(VM* vm, uint16_t idx)
 
 	VERIFY_STACK_UNDERFLOW();
 
-	// Top of the stack is the parameter count 
-	cf->arg_count = (uint16_t)as_number(pop(&vm->stack));
+	// Top of the stack is the argument count 
+	cf->arg_count = (uint8_t)as_number(pop(&vm->stack));
 	cf->stack_base = vm->stack.count;
 	cf->local_base = vm->locals.count;
 
 	// Push locals
-	for (uint16_t i = 0; i < cf->arg_count; i++)
+	for (uint8_t i = 0; i < cf->arg_count; i++)
 	{
 		VERIFY_STACK_UNDERFLOW();
 
@@ -151,14 +160,14 @@ inline Trap RET(VM* vm)
 	trim_end(&vm->locals, cf->local_base);
 	trim_end(&vm->stack, cf->stack_base);
 
-	const Value* top = end(vm->stack);
+	Value top = *pop(&vm->stack);
 
 	// All procedures are required to load a value on the stack followed by a RET statement at the end.
 	// If the value on the stack is (undefined), which is our NULL type, we assume no usable value will be
 	// returned.
-	if (top->type != VALUE_UNDEFINED)
+	if (top.type != VALUE_UNDEFINED)
 	{
-		push(&vm->stack, *top);
+		push(&vm->stack, top);
 	}
 
 	vm->ic = cf->return_ic;
@@ -261,9 +270,9 @@ Trap execute(VM* vm)
 			r = MUL(vm);
 		} break;
 
-		case INSTRUCTION_AND:
+		case INSTRUCTION_MOD:
 		{
-			r = AND(vm);
+			r = MOD(vm);
 		} break;
 
 		case INSTRUCTION_OR:

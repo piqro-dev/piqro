@@ -24,7 +24,7 @@ struct Value
 	};
 };
 
-static inline Value make_value()
+inline Value make_value()
 {
 	Value value = {};
 
@@ -33,7 +33,7 @@ static inline Value make_value()
 	return value;
 }
 
-static inline Value make_value(float v)
+inline Value make_value(float v)
 {
 	Value value = {};
 
@@ -43,7 +43,7 @@ static inline Value make_value(float v)
 	return value;
 }
 
-static inline Value make_value(bool v)
+inline Value make_value(bool v)
 {
 	Value value = {};
 
@@ -53,7 +53,7 @@ static inline Value make_value(bool v)
 	return value;
 }
 
-static inline Value make_value(const char* v)
+inline Value make_value(const char* v)
 {
 	Value value = {};
 
@@ -63,7 +63,7 @@ static inline Value make_value(const char* v)
 	return value;
 }
 
-static inline float as_number(const Value* v)
+inline float as_number(const Value* v)
 {
 	switch (v->type) 
 	{
@@ -78,7 +78,7 @@ static inline float as_number(const Value* v)
 	return 0.0f;
 }
 
-static inline bool as_boolean(const Value* v)
+inline bool as_boolean(const Value* v)
 {
 	switch (v->type) 
 	{
@@ -93,7 +93,7 @@ static inline bool as_boolean(const Value* v)
 	return false;
 }
 
-static inline void as_string(const Value* v, char* out, size_t n)
+inline void as_string(const Value* v, char* out, size_t n)
 {
 	switch (v->type) 
 	{
@@ -121,62 +121,67 @@ static inline void as_string(const Value* v, char* out, size_t n)
 	ASSERT(true && "Invalid value type");
 }
 
-static inline Value operator+(const Value& l, const Value& r)
+inline Value operator+(const Value& l, const Value& r)
 {
 	return make_value(as_number(&l) + as_number(&r));
 }
 
-static inline Value operator-(const Value& l, const Value& r)
+inline Value operator-(const Value& l, const Value& r)
 {
 	return make_value(as_number(&l) - as_number(&r));
 }
 
-static inline Value operator*(const Value& l, const Value& r)
-{
-	return make_value(as_number(&l) * as_number(&r));
-}
-
-static inline Value operator/(const Value& l, const Value& r)
+inline Value operator/(const Value& l, const Value& r)
 {
 	return make_value(as_number(&l) / as_number(&r));
 }
 
-static inline Value operator==(const Value& l, const Value& r)
+inline Value operator*(const Value& l, const Value& r)
+{
+	return make_value(as_number(&l) * as_number(&r));
+}
+
+inline Value operator%(const Value& l, const Value& r)
+{
+	return make_value(__builtin_fmodf(as_number(&l), as_number(&r)));
+}
+
+inline Value operator==(const Value& l, const Value& r)
 {
 	return make_value(as_number(&l) == as_number(&r));
 }
 
-static inline Value operator&&(const Value& l, const Value& r)
+inline Value operator&&(const Value& l, const Value& r)
 {
 	return make_value(as_boolean(&l) && as_boolean(&r));
 }
 
-static inline Value operator||(const Value& l, const Value& r)
+inline Value operator||(const Value& l, const Value& r)
 {
 	return make_value(as_boolean(&l) || as_boolean(&r));
 }
 
-static inline Value operator<(const Value& l, const Value& r)
+inline Value operator<(const Value& l, const Value& r)
 {
 	return make_value(as_number(&l) < as_number(&r));
 }
 
-static inline Value operator>(const Value& l, const Value& r)
+inline Value operator>(const Value& l, const Value& r)
 {
 	return make_value(as_number(&l) > as_number(&r));
 }
 
-static inline Value operator<=(const Value& l, const Value& r)
+inline Value operator<=(const Value& l, const Value& r)
 {
 	return make_value(as_number(&l) <= as_number(&r));
 }
 
-static inline Value operator>=(const Value& l, const Value& r)
+inline Value operator>=(const Value& l, const Value& r)
 {
 	return make_value(as_number(&l) >= as_number(&r));
 }
 
-static inline Value operator!(const Value& v)
+inline Value operator!(const Value& v)
 {
 	return make_value(!as_boolean(&v));
 }

@@ -31,6 +31,13 @@ struct Procedure
 	Scope scope;
 };
 
+struct Loop
+{
+	uint16_t local;
+
+	Scope scope;
+};
+
 struct Generator
 {
 	const char* source;
@@ -39,15 +46,16 @@ struct Generator
 
 	Array <Value> immediates;
 	Array <Identifier> variables;
-	Array <Scope> scopes;
 	Array <Procedure> procedures;
 
+	Scope* current_scope;
 	Procedure* current_procedure;
+	Loop* current_loop;
 
-	uint16_t line;
+	uint16_t line;	
 	uint16_t ptr;
 };
 
-void init(Generator* gen, Arena* arena, const char* source, Array <Token> tokens);
+void init(Generator* gen, Arena* arena, const char* source, Array <Token> token);
 
 void emit_program(Generator* gen, Array <Instruction>* out);

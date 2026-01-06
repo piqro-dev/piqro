@@ -10,7 +10,7 @@ struct Arena
 	size_t capacity;
 };
 
-static inline Arena make_arena(uint8_t* buffer, size_t capacity) 
+inline Arena make_arena(uint8_t* buffer, size_t capacity) 
 {
 	Arena arena = {};
 
@@ -22,7 +22,7 @@ static inline Arena make_arena(uint8_t* buffer, size_t capacity)
 }
 
 template <typename T>
-static inline T* push(Arena* arena, size_t count = 1)
+inline T* push(Arena* arena, size_t count = 1)
 {
 	ASSERT(arena->offset < arena->buffer + arena->capacity && "Out of memory");
 
@@ -31,14 +31,14 @@ static inline T* push(Arena* arena, size_t count = 1)
 }
 
 template <typename T, typename ... Args>
-static inline T* emplace(Arena* arena, const Args& ... args)
+inline T* emplace(Arena* arena, const Args& ... args)
 {
 	T* ptr = push<T>(arena);
 	*ptr = T{ args... };
 	return ptr;
 }
 
-static inline void reset(Arena* arena)
+inline void reset(Arena* arena)
 {
 	arena->offset = arena->buffer;
 }

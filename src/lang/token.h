@@ -3,32 +3,49 @@
 #include <base/common.h>
 
 #define DEFINE_TOKENS \
-	TOKEN(UNKNOWN,     "unknown") \
+	TOKEN(UNKNOWN,        "unknown") \
 	\
-	TOKEN(STRING,      "string literal") \
-	TOKEN(NUMBER,      "number literal") \
-	TOKEN(IDENTIFIER,  "identifier") \
-	TOKEN(TRUE,        "`true`") \
-	TOKEN(FALSE,       "`false`") \
+	TOKEN(STRING,         "string literal") \
+	TOKEN(NUMBER,         "number literal") \
+	TOKEN(IDENTIFIER,     "identifier") \
+	TOKEN(TRUE,           "`true`") \
+	TOKEN(FALSE,          "`false`") \
 	\
-	TOKEN(VAR,         "keyword `var`") \
-	TOKEN(FOREVER,     "keyword `forever`") \
-	TOKEN(REPEAT,      "keyword `repeat`") \
-	TOKEN(DEFINE,      "keyword `define`") \
-	TOKEN(RETURN,      "keyword `return`") \
-	TOKEN(IF,          "keyword `if`") \
-	TOKEN(ELSE,        "keyword `else`") \
+	TOKEN(VAR,            "keyword `var`") \
+	TOKEN(FOREVER,        "keyword `forever`") \
+	TOKEN(REPEAT,         "keyword `repeat`") \
+	TOKEN(DEFINE,         "keyword `define`") \
+	TOKEN(RETURN,         "keyword `return`") \
+	TOKEN(IF,             "keyword `if`") \
+	TOKEN(ELSE,           "keyword `else`") \
+	TOKEN(BREAK,          "keyword `break`") \
 	\
-	TOKEN(PLUS,        "`+`") \
-	TOKEN(DASH,        "`-`") \
-	TOKEN(SLASH,       "`/`") \
-	TOKEN(STAR,        "`*`") \
-	TOKEN(EQUALS,      "`=`") \
-	TOKEN(OPEN_CURLY,  "`{`") \
-	TOKEN(CLOSE_CURLY, "`}`") \
-	TOKEN(OPEN_BRACE,  "`(`") \
-	TOKEN(CLOSE_BRACE, "`)`") \
-	TOKEN(COMMA,       "`,`")
+	TOKEN(LESS,           "`<`") \
+	TOKEN(GREATER,        "`>`") \
+	TOKEN(LESS_THAN,      "`<=`") \
+	TOKEN(GREATER_THAN,   "`>=`") \
+	TOKEN(EQUALS,         "`=`") \
+	TOKEN(DOUBLE_EQUALS,  "`==`") \
+	TOKEN(EXCLAMATION,    "`!`") \
+	TOKEN(NOT_EQUALS,     "`!=`") \
+	TOKEN(DOUBLE_AND,     "`&&`") \
+	TOKEN(DOUBLE_PIPE,    "`||`") \
+	TOKEN(PERCENT,        "`%`") \
+	TOKEN(PERCENT_EQUALS, "`%=`") \
+	TOKEN(PLUS,           "`+`") \
+	TOKEN(PLUS_EQUALS,    "`+=`") \
+	TOKEN(DASH,           "`-`") \
+	TOKEN(DASH_EQUALS,    "`-=`") \
+	TOKEN(SLASH,          "`/`") \
+	TOKEN(SLASH_EQUALS,   "`/=`") \
+	TOKEN(STAR,           "`*`") \
+	TOKEN(STAR_EQUALS,    "`*=`") \
+	\
+	TOKEN(OPEN_CURLY,     "`{`") \
+	TOKEN(CLOSE_CURLY,    "`}`") \
+	TOKEN(OPEN_BRACE,     "`(`") \
+	TOKEN(CLOSE_BRACE,    "`)`") \
+	TOKEN(COMMA,          "`,`")
 
 #undef TOKEN
 #define TOKEN(name, fancy_name) TOKEN_##name,
@@ -66,22 +83,36 @@ inline void as_string(Token t, const char* src, char* out, size_t n)
 
 inline bool is_binary_op(const TokenType type)
 {
-	return type >= TOKEN_PLUS && type <= TOKEN_STAR;
+	return type >= TOKEN_LESS && type <= TOKEN_STAR_EQUALS;
 }
 
-inline uint8_t precedence_of(const TokenType type)
+// The precedences mostly follow C's.
+// See: https://en.cppreference.com/w/c/language/operator_precedence.html
+// Goes from lowest from highest level of precedence
+inline int8_t precedence_of(const TokenType type)
 {
 	switch (type)
 	{
+		case TOKEN_DOUBLE_AND: return 0;
+		case TOKEN_DOUBLE_PIPE: return 1;
+
+		case TOKEN_NOT_EQUALS:
+		case TOKEN_DOUBLE_EQUALS: return 2;  
+
+		case TOKEN_LESS:
+		case TOKEN_GREATER:
+		case TOKEN_LESS_THAN:
+		case TOKEN_GREATER_THAN: return 3;
+
 		case TOKEN_PLUS:
-		case TOKEN_DASH: return 0;
+		case TOKEN_DASH: return 4;
 
+		case TOKEN_PERCENT:
 		case TOKEN_SLASH:
-		case TOKEN_STAR: return 1;
+		case TOKEN_STAR: return 5;
 
-		default: {};
-		// TODO: ( ... )
+		default: {}
 	}
 
-	return (uint8_t)-1;
+	return -1;
 }

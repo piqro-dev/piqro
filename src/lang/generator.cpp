@@ -215,7 +215,7 @@ inline void emit_procedure_expression(Generator* gen, Array <Instruction>* out)
 			// Check for <expr>,)
 			if (peek_token(gen).type == TOKEN_CLOSE_BRACE)
 			{
-				error(gen, "Expected argument after `,` in procedure call, got `)`");
+				error(gen, "Expected expression after `,` in procedure call, got `)`");
 			}
 		}
 	}
@@ -237,7 +237,7 @@ inline void emit_procedure_expression(Generator* gen, Array <Instruction>* out)
 	emplace(out, INSTRUCTION_CALL, proc->scope.first_inst);
 }
 
-// <ident> = <expr>
+// <ident> =... <expr>
 inline void emit_assign_expression(Generator* gen, Array <Instruction>* out) 
 {
 	// <ident> 
@@ -251,20 +251,130 @@ inline void emit_assign_expression(Generator* gen, Array <Instruction>* out)
 		error(gen, "Undefined identifier '%s'", name);
 	}
 
-	// =
-	try_eat_token(gen, TOKEN_EQUALS);
+	// =...
+	Token assign = eat_token(gen);
 
-	// <expr>
-	emit_expression(gen, out);
+	switch (assign.type)
+	{
+		case TOKEN_EQUALS: break;
 
-	emplace(out, INSTRUCTION_STORE_LOCAL, get_or_create_variable(gen, name));
+		case TOKEN_PLUS_EQUALS: 
+		{
+			emplace(out, INSTRUCTION_LOAD_LOCAL, get_or_create_variable(gen, name));
+
+			// <expr>
+			emit_expression(gen, out);
+
+			// +=
+			emplace(out, INSTRUCTION_ADD);
+			emplace(out, INSTRUCTION_STORE_LOCAL, get_or_create_variable(gen, name));
+		} break;
+
+		case TOKEN_DASH_EQUALS: 
+		{
+			emplace(out, INSTRUCTION_LOAD_LOCAL, get_or_create_variable(gen, name));
+
+			// <expr>
+			emit_expression(gen, out);
+
+			// -=
+			emplace(out, INSTRUCTION_SUB);
+			emplace(out, INSTRUCTION_STORE_LOCAL, get_or_create_variable(gen, name));
+		} break;
+
+		case TOKEN_SLASH_EQUALS: 
+		{
+			emplace(out, INSTRUCTION_LOAD_LOCAL, get_or_create_variable(gen, name));
+
+			// <expr>
+			emit_expression(gen, out);
+
+			// /=
+			emplace(out, INSTRUCTION_DIV);
+			emplace(out, INSTRUCTION_STORE_LOCAL, get_or_create_variable(gen, name));
+		} break;
+
+		case TOKEN_STAR_EQUALS: 
+		{
+			emplace(out, INSTRUCTION_LOAD_LOCAL, get_or_create_variable(gen, name));
+
+			// <expr>
+			emit_expression(gen, out);
+
+			// *=
+			emplace(out, INSTRUCTION_MUL);
+			emplace(out, INSTRUCTION_STORE_LOCAL, get_or_create_variable(gen, name));
+		} break;
+
+		case TOKEN_PERCENT_EQUALS: 
+		{
+			emplace(out, INSTRUCTION_LOAD_LOCAL, get_or_create_variable(gen, name));
+
+			// <expr>
+			emit_expression(gen, out);
+
+			// %=
+			emplace(out, INSTRUCTION_MOD);
+			emplace(out, INSTRUCTION_STORE_LOCAL, get_or_create_variable(gen, name));
+		} break;
+
+
+		default: 
+		{
+			error(gen, "Unexpected %s", to_string(assign.type));
+		}
+	}
+
 	emplace(out, INSTRUCTION_LOAD_LOCAL, get_or_create_variable(gen, name));
 }
 
 // <expr> <op> <expr>
-inline void emit_binary_expression(Generator* gen, Array <Instruction>* out, uint8_t min_precedence = 0)
+// Based on https://eli.thegreenplace.net/2012/08/02/parsing-expressions-by-precedence-climbing
+inline void emit_binary_expression(Generator* gen, Array <Instruction>* out, int8_t min_precedence = -1)
 {
-	error(gen, "TODO: Binary expressions are not implemented");
+	// Avoid recursion
+	if (min_precedence > -1) 
+	{
+		// Left <expr>
+		emit_expression(gen, out);
+	}
+
+	// <op>
+	Token op = eat_token(gen);
+
+	// Right <expr>
+	emit_expression(gen, out);
+
+	switch (op.type)
+	{
+		case TOKEN_PERCENT: emplace(out, INSTRUCTION_MOD); break; 
+		case TOKEN_PLUS:    emplace(out, INSTRUCTION_ADD); break; 
+		case TOKEN_DASH:    emplace(out, INSTRUCTION_SUB); break;
+		case TOKEN_SLASH:   emplace(out, INSTRUCTION_DIV); break; 
+		case TOKEN_STAR:    emplace(out, INSTRUCTION_MUL); break; 
+
+		case TOKEN_LESS:         emplace(out, INSTRUCTION_LESS); break; 
+		case TOKEN_GREATER:      emplace(out, INSTRUCTION_GREATER); break; 
+		case TOKEN_LESS_THAN:    emplace(out, INSTRUCTION_LESS_THAN); break; 
+		case TOKEN_GREATER_THAN: emplace(out, INSTRUCTION_GREATER_THAN); break; 
+		
+		case TOKEN_DOUBLE_EQUALS: emplace(out, INSTRUCTION_EQUALS); break; 
+		case TOKEN_NOT_EQUALS:    emplace(out, INSTRUCTION_EQUALS); emplace(out, INSTRUCTION_NOT); break; 
+		
+		case TOKEN_DOUBLE_AND:  emplace(out, INSTRUCTION_AND); break; 
+		case TOKEN_DOUBLE_PIPE: emplace(out, INSTRUCTION_OR); break; 
+		
+		default: { error(gen, "TODO: Not implemented: %s", to_string(op.type)); }
+	}
+
+	// Next token
+	op = peek_token(gen);
+
+	while (is_binary_op(op.type) && precedence_of(op.type) >= min_precedence)
+	{
+		min_precedence = precedence_of(op.type) + 1;
+		emit_binary_expression(gen, out, min_precedence);
+	}
 }
 
 inline void emit_expression(Generator* gen, Array <Instruction>* out)
@@ -299,7 +409,6 @@ inline void emit_expression(Generator* gen, Array <Instruction>* out)
 		error(gen, "Expected expression, got %s", to_string(expr.type));
 	}
 
-	// Do binary expressions here to avoid infinite recursion.	
 	if (is_binary_op(peek_token(gen).type))
 	{
 		emit_binary_expression(gen, out);
@@ -310,41 +419,41 @@ inline void emit_expression(Generator* gen, Array <Instruction>* out)
 // Scope
 //
 
-inline Scope* begin_scope(Generator* gen, Array <Instruction>* out) 
+inline void begin_scope(Generator* gen, Array <Instruction>* out, Scope* scope) 
 {
 	// {
 	try_eat_token(gen, TOKEN_OPEN_CURLY);
 
-	Scope* scope = push(&gen->scopes);
-
-	scope->first_inst = out->count + 1;
+	scope->first_inst = out->count;
 	scope->local_base = gen->variables.count;
 
-	return scope;
+	gen->current_scope = scope;
 }
 
-inline void end_scope(Generator* gen, Array <Instruction>* out) 
+inline void end_scope(Generator* gen, Array <Instruction>* out, Scope* scope) 
 {
 	// }
 	try_eat_token(gen, TOKEN_CLOSE_CURLY);
 
-	Scope* scope = pop(&gen->scopes);
-
 	scope->last_inst = out->count;
 
 	trim_end(&gen->variables, scope->local_base);
+
+	gen->current_scope = nullptr;
 }
 
 inline void emit_scope(Generator* gen, Array <Instruction>* out)
 {
-	begin_scope(gen, out);
+	Scope scope = {};
+
+	begin_scope(gen, out, &scope);
 
 	while (peek_token(gen).type != TOKEN_CLOSE_CURLY)
 	{
 		emit_statement(gen, out);
 	}
 
-	end_scope(gen, out);
+	end_scope(gen, out, &scope);
 }
 
 //
@@ -449,16 +558,16 @@ inline void emit_define_statement(Generator* gen, Array <Instruction>* out)
 	// )
 	try_eat_token(gen, TOKEN_CLOSE_BRACE);
 
-	Scope* scope = begin_scope(gen, out);
+	// Definitions are skipped initiallly
+	Instruction* jump = emplace(out, INSTRUCTION_JUMP);
+
+	// {
+	begin_scope(gen, out, &proc->scope);
 
 	// Move the local index back to the first argument
-	scope->local_base = gen->variables.count - proc->arg_count;
+	proc->scope.local_base = gen->variables.count - proc->arg_count;
 
 	gen->current_procedure = proc;
-
-	// Save it, as we only know the last instruction after the
-	// end_scope(); 
-	Instruction* jump = emplace(out, INSTRUCTION_JUMP);
 
 	// { ... }
 	while (peek_token(gen).type != TOKEN_CLOSE_CURLY)
@@ -473,14 +582,13 @@ inline void emit_define_statement(Generator* gen, Array <Instruction>* out)
 		emplace(out, INSTRUCTION_RET);
 	}
 
-	end_scope(gen, out);
-
-	proc->scope = *scope;
-
-	// We know the last instruction now, jump here.
-	jump->arg = scope->last_inst;
+	// }
+	end_scope(gen, out, &proc->scope);
 
 	gen->current_procedure = nullptr;
+
+	// We know the last instruction now, we'll jump here.
+	jump->arg = proc->scope.last_inst;
 }
 
 // return <expr>
@@ -504,6 +612,19 @@ inline void emit_return_statement(Generator* gen, Array <Instruction>* out)
 	emplace(out, INSTRUCTION_RET);
 }
 
+inline void patch_breaks(const Loop* loop, Array <Instruction>* instructions) 
+{
+	for (uint16_t i = loop->scope.first_inst; i < loop->scope.last_inst; i++) 
+	{
+		Instruction* it = &(*instructions)[i];
+
+		if (it->type == INSTRUCTION_JUMP && it->arg == (uint16_t)-1) 
+		{
+			it->arg = loop->scope.last_inst + 1;
+		}
+	}
+}
+
 //
 // The statement `repeat <expr> { ... }` replicates the equivalent of this C code:
 //
@@ -522,20 +643,21 @@ inline void emit_repeat_statement(Generator* gen, Array <Instruction>* out)
 	// <expr>
 	emit_expression(gen, out);
 
+	Loop loop = {};
+	
 	// {
-	Scope* scope = begin_scope(gen, out);
+	begin_scope(gen, out, &loop.scope);
 
-	// Create a local variable to keep track of the repeat statement
 	Identifier name = {};
-	__builtin_sprintf(name, "repeat_local_%d", scope->local_base);
+	__builtin_sprintf(name, "repeat_local_%d", loop.scope.local_base);
 
-	uint16_t var = get_or_create_variable(gen, name);
+	loop.local = get_or_create_variable(gen, name);
 
 	// repeat_local = <expr>
-	emplace(out, INSTRUCTION_STORE_LOCAL, var);
+	emplace(out, INSTRUCTION_STORE_LOCAL, loop.local);
 
 	// repeat_local >= 0
-	emplace(out, INSTRUCTION_LOAD_LOCAL, var);
+	emplace(out, INSTRUCTION_LOAD_LOCAL, loop.local);
 	emplace(out, INSTRUCTION_LOAD_IMMEDIATE, get_or_create_immediate(gen, make_value(0.0f)));
 	emplace(out, INSTRUCTION_LESS_THAN);
 
@@ -543,31 +665,42 @@ inline void emit_repeat_statement(Generator* gen, Array <Instruction>* out)
 	Instruction* jump_cond = emplace(out, INSTRUCTION_JUMP_COND);
 
 	// repeat_local = repeat_local - 1
-	emplace(out, INSTRUCTION_LOAD_LOCAL, var);
+	emplace(out, INSTRUCTION_LOAD_LOCAL, loop.local);
 	emplace(out, INSTRUCTION_LOAD_IMMEDIATE, get_or_create_immediate(gen, make_value(1.0f)));
 	emplace(out, INSTRUCTION_SUB);
-	emplace(out, INSTRUCTION_STORE_LOCAL, var);
+	emplace(out, INSTRUCTION_STORE_LOCAL, loop.local);
+
+	gen->current_loop = &loop;
 
 	while (peek_token(gen).type != TOKEN_CLOSE_CURLY)
 	{
 		emit_statement(gen, out);
 	}
 
-	end_scope(gen, out);
+	gen->current_loop = nullptr;
 
-	emplace(out, INSTRUCTION_JUMP, scope->first_inst);
+	end_scope(gen, out, &loop.scope);
 
-	jump_cond->arg = scope->last_inst + 1; // Last statement + the jump
+	emplace(out, INSTRUCTION_JUMP, loop.scope.first_inst);
+
+	jump_cond->arg = loop.scope.last_inst + 1; // Last statement + the jump
+
+	// Patch breaks
+	patch_breaks(&loop, out);
 }
 
 // forever { ... }
 inline void emit_forever_statement(Generator* gen, Array <Instruction>* out)
 {
 	// forever
-	eat_token(gen);
+	eat_token(gen);	
+
+	Loop loop = {};
 
 	// {
-	Scope* scope = begin_scope(gen, out);
+	begin_scope(gen, out, &loop.scope);
+	
+	gen->current_loop = &loop;
 
 	// Statements
 	while (peek_token(gen).type != TOKEN_CLOSE_CURLY)
@@ -575,16 +708,19 @@ inline void emit_forever_statement(Generator* gen, Array <Instruction>* out)
 		emit_statement(gen, out);
 	}
 
-	// }
-	end_scope(gen, out);
+	gen->current_loop = nullptr;
 
-	// TODO: I have no idea why is the - 1 needed..
-	emplace(out, INSTRUCTION_JUMP, (uint16_t)(scope->first_inst - 1));
+	// }
+	end_scope(gen, out, &loop.scope);
+
+	emplace(out, INSTRUCTION_JUMP, loop.scope.first_inst);
+
+	patch_breaks(&loop, out);
 }
 
-inline void emit_else_if_statement(Generator* gen, Array <Instruction>* out, Scope last_scope);
+inline void emit_else_if_statement(Generator* gen, Array <Instruction>* out);
 
-inline void emit_else_statement(Generator* gen, Array <Instruction>* out, Scope last_scope);
+inline void emit_else_statement(Generator* gen, Array <Instruction>* out);
 
 // if <expr> { ... }
 inline void emit_if_statement(Generator* gen, Array <Instruction>* out)
@@ -602,8 +738,10 @@ inline void emit_if_statement(Generator* gen, Array <Instruction>* out)
 	// True? Skip the block.
 	Instruction* jump_cond = emplace(out, INSTRUCTION_JUMP_COND);
 
+	Scope scope = {};
+
 	// {
-	Scope* scope = begin_scope(gen, out);
+	begin_scope(gen, out, &scope);
 
 	// Statements
 	while (peek_token(gen).type != TOKEN_CLOSE_CURLY)
@@ -612,29 +750,29 @@ inline void emit_if_statement(Generator* gen, Array <Instruction>* out)
 	}
  
 	// }
-	end_scope(gen, out);
+	end_scope(gen, out, &scope);
 
 	// This jumps to the end of this block if <expr> == false (therefore, not executing this block).
-	jump_cond->arg = scope->last_inst;
+	jump_cond->arg = scope.last_inst;
 
 	if (peek_token(gen).type == TOKEN_ELSE)
 	{
 		// These emit an additional jump at the beginning, in case this block ends up executing, so jump here instead.
 		if (peek_token(gen, 1).type == TOKEN_IF)
 		{
-			emit_else_if_statement(gen, out, *scope);
+			emit_else_if_statement(gen, out);
 			jump_cond->arg++;
 		}
 		else
 		{
-			emit_else_statement(gen, out, *scope);
+			emit_else_statement(gen, out);
 			jump_cond->arg++;
 		}
 	}
 }
 
 // else if <expr> { ... }
-inline void emit_else_if_statement(Generator* gen, Array <Instruction>* out, Scope last_scope) 
+inline void emit_else_if_statement(Generator* gen, Array <Instruction>* out) 
 {
 	// If the last block executes, this will skip this block.
 	Instruction* jump = emplace(out, INSTRUCTION_JUMP);
@@ -653,8 +791,10 @@ inline void emit_else_if_statement(Generator* gen, Array <Instruction>* out, Sco
 	// True? Skip the block.
 	Instruction* jump_cond = emplace(out, INSTRUCTION_JUMP_COND);
 
+	Scope scope = {};
+
 	// {
-	Scope* scope = begin_scope(gen, out);
+	begin_scope(gen, out, &scope);
 
 	// Statements
 	while (peek_token(gen).type != TOKEN_CLOSE_CURLY)
@@ -663,40 +803,42 @@ inline void emit_else_if_statement(Generator* gen, Array <Instruction>* out, Sco
 	}
 
 	// }
-	end_scope(gen, out);
+	end_scope(gen, out, &scope);
 
 	// This jumps to the end of this block if the last block was executed. 
-	jump->arg = scope->last_inst;
+	jump->arg = scope.last_inst;
 
 	// This jumps to the end of this block if <expr> == false (therefore, not executing this block).
-	jump_cond->arg = scope->last_inst;
+	jump_cond->arg = scope.last_inst;
 
 	if (peek_token(gen).type == TOKEN_ELSE)
 	{
 		// These emit an additional jump at the beginning, in case this block ends up executing, so jump here instead.
 		if (peek_token(gen, 1).type == TOKEN_IF)
 		{
-			emit_else_if_statement(gen, out, *scope);
+			emit_else_if_statement(gen, out);
 			jump_cond->arg++;
 		}
 		else
 		{
-			emit_else_statement(gen, out, *scope);
+			emit_else_statement(gen, out);
 			jump_cond->arg++;
 		}
 	}
 }
 
 // else { ... }
-inline void emit_else_statement(Generator* gen, Array <Instruction>* out, Scope last_scope) 
+inline void emit_else_statement(Generator* gen, Array <Instruction>* out) 
 {
 	Instruction* jump = emplace(out, INSTRUCTION_JUMP);
 
 	// else
 	eat_token(gen);
 
+	Scope scope = {};
+	
 	// {
-	Scope* scope = begin_scope(gen, out);
+	begin_scope(gen, out, &scope);
 
 	// Statements
 	while (peek_token(gen).type != TOKEN_CLOSE_CURLY)
@@ -705,9 +847,24 @@ inline void emit_else_statement(Generator* gen, Array <Instruction>* out, Scope 
 	}
 
 	// }
-	end_scope(gen, out);
+	end_scope(gen, out, &scope);
 
-	jump->arg = scope->last_inst;
+	jump->arg = scope.last_inst;
+}
+
+// break
+inline void emit_break_statement(Generator* gen, Array <Instruction>* out) 
+{
+	if (!gen->current_loop)
+	{
+		error(gen, "Cannot use break outside a loop.");
+	}
+
+	// break
+	eat_token(gen);
+
+	// Argument is -1 so we know what instructions to patch in the loop statements.
+	emplace(out, INSTRUCTION_JUMP, (uint16_t)-1);
 }
 
 inline void emit_statement(Generator* gen, Array <Instruction>* out)
@@ -756,6 +913,11 @@ inline void emit_statement(Generator* gen, Array <Instruction>* out)
 	{
 		emit_if_statement(gen, out);
 	}
+	// break
+	else if (peek_token(gen).type == TOKEN_BREAK)
+	{
+		emit_break_statement(gen, out);
+	}
 	// Both of these statements cannot exist without an if statement, so these are
 	// handled above. 
 	else if (peek_token(gen).type == TOKEN_ELSE)
@@ -792,10 +954,11 @@ void init(Generator* gen, Arena* arena, const char* source, Array <Token> tokens
 
 	gen->immediates = make_array<Value>(arena, MAX_IMMEDIATES);
 	gen->variables = make_array<Identifier>(arena, MAX_VARIABLES);
-	gen->scopes = make_array<Scope>(arena, MAX_SCOPES);
 	gen->procedures = make_array<Procedure>(arena, MAX_PROCEDURES);
 
 	gen->current_procedure = nullptr;
+	gen->current_loop = nullptr;
+	gen->current_scope = nullptr;
 	
 	gen->line = 1;
 	gen->ptr = 0;
