@@ -48,6 +48,8 @@ struct Generator
 	Array <Identifier> variables;
 	Array <Procedure> procedures;
 
+	Array <Instruction>* instructions;
+
 	Scope* current_scope;
 	Procedure* current_procedure;
 	Loop* current_loop;

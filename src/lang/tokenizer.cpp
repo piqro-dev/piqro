@@ -43,6 +43,7 @@ static constexpr struct
 	{ TOKEN_VAR,     "var" },
 	{ TOKEN_FOREVER, "forever" },
 	{ TOKEN_REPEAT,  "repeat" },
+	{ TOKEN_UNTIL,   "until" },
 	{ TOKEN_DEFINE,  "define" },
 	{ TOKEN_RETURN,  "return" },
 	{ TOKEN_IF,      "if" },
@@ -347,25 +348,25 @@ void tokenize(Tokenizer* tok, Array <Token>* out)
 
 			case '{':
 			{
-				emplace(out, TOKEN_OPEN_CURLY, tok->line);
+				emplace(out, TOKEN_OPEN_BRACE, tok->line);
 				eat_char(tok);
 			} break;
 
 			case '}':
 			{
-				emplace(out, TOKEN_CLOSE_CURLY, tok->line);
+				emplace(out, TOKEN_CLOSE_BRACE, tok->line);
 				eat_char(tok);
 			} break;
 
 			case '(':
 			{
-				emplace(out, TOKEN_OPEN_BRACE, tok->line);
+				emplace(out, TOKEN_OPEN_PAREN, tok->line);
 				eat_char(tok);
 			} break;
 
 			case ')':
 			{
-				emplace(out, TOKEN_CLOSE_BRACE, tok->line);		
+				emplace(out, TOKEN_CLOSE_PAREN, tok->line);		
 				eat_char(tok);
 			} break;
 

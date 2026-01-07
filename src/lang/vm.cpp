@@ -42,6 +42,11 @@ inline Trap LOAD_LOCAL(VM* vm, uint16_t idx)
 
 inline Trap STORE_LOCAL(VM* vm, uint16_t idx)
 {
+	if (vm->call_frames.count > 0) 
+	{
+		idx += end(vm->call_frames)->local_base;
+	}
+
 	if (idx > MAX_VARIABLES || vm->locals.count < idx)
 	{
 		return TRAP_OUT_OF_BOUNDS;
@@ -49,15 +54,16 @@ inline Trap STORE_LOCAL(VM* vm, uint16_t idx)
 
 	VERIFY_STACK_UNDERFLOW();
 
+	Value v = *pop(&vm->stack);
+
 	if (vm->locals.count <= idx)
 	{
-		push(&vm->locals, *pop(&vm->stack));
+		push(&vm->locals, v);
 	}
 	else
 	{
-		vm->locals[idx] = *pop(&vm->stack);
+		vm->locals[idx] = v;
 	}
-
 
 	return TRAP_SUCCESS;
 }

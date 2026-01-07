@@ -14,6 +14,7 @@
 	TOKEN(VAR,            "keyword `var`") \
 	TOKEN(FOREVER,        "keyword `forever`") \
 	TOKEN(REPEAT,         "keyword `repeat`") \
+	TOKEN(UNTIL,          "keyword `until`") \
 	TOKEN(DEFINE,         "keyword `define`") \
 	TOKEN(RETURN,         "keyword `return`") \
 	TOKEN(IF,             "keyword `if`") \
@@ -41,10 +42,10 @@
 	TOKEN(STAR,           "`*`") \
 	TOKEN(STAR_EQUALS,    "`*=`") \
 	\
-	TOKEN(OPEN_CURLY,     "`{`") \
-	TOKEN(CLOSE_CURLY,    "`}`") \
-	TOKEN(OPEN_BRACE,     "`(`") \
-	TOKEN(CLOSE_BRACE,    "`)`") \
+	TOKEN(OPEN_BRACE,     "`{`") \
+	TOKEN(CLOSE_BRACE,    "`}`") \
+	TOKEN(OPEN_PAREN,     "`(`") \
+	TOKEN(CLOSE_PAREN,    "`)`") \
 	TOKEN(COMMA,          "`,`")
 
 #undef TOKEN

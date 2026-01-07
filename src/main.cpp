@@ -84,27 +84,7 @@ inline void dump_state()
 		println("    N/A");
 	}
 
-	println("\n  Locals dump:");
-	
-	CallFrame* cf = end(vm.call_frames);
-
-	if (vm.locals.count > 0)
-	{
-		for (uint16_t i = cf->local_base; i < vm.locals.count; i++)
-		{
-			char buf[128] = {};
-			as_string(&vm.stack[i], buf, 128);
-
-			println("    [%d] %s", i, buf);
-		}
-	}
-	else
-	{
-		println("    N/A");
-	}
-
 	println("");
-
 }
 
 inline void execute_program()
@@ -149,18 +129,16 @@ static uint8_t arena_memory[128 * 1024];
 static Arena arena;
 
 static constexpr char source[] = 
-R"( 
-define fib(x) {
-	if x == 0 {
-		return 0
-	} else if x == 1 {
-		return 1
-	} else {
-		return fib(x - 1) + fib(x - 2)
-	}
+R"(
+define hello(x) {
+	return x
 }
 
-var a = fib(6)
+var a = 10
+var b = hello(a + 2)
+
+a = b
+
 )";
 
 extern "C" void mainCRTStartup()
@@ -181,8 +159,6 @@ extern "C" void mainCRTStartup()
 
 	init(&vm, &arena, instructions, gen.immediates);
 	execute_program();
-
-	println("Arena usage: %.2f kb out of %.2f kb", (arena.offset - arena.buffer) * 0.001f, arena.capacity * 0.001f);
 
 	exit(0);
 }
