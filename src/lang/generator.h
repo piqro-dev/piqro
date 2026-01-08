@@ -25,7 +25,8 @@ struct Procedure
 {
 	char name[64];
 
-	uint8_t arg_count;
+	uint16_t local_count;
+	uint8_t arg_count;	
 	bool returns_value;
 	
 	Scope scope;
@@ -53,6 +54,8 @@ struct Generator
 	Scope* current_scope;
 	Procedure* current_procedure;
 	Loop* current_loop;
+
+	uint16_t top_level_var_count;
 
 	uint16_t line;	
 	uint16_t ptr;

@@ -69,6 +69,12 @@ inline T* remove(Array <T>* array, size_t at)
 	return &array->elements[at] = *pop(array);
 }
 
+template <typename T>
+inline T* peek(Array <T>* array) 
+{
+	return &(*array)[array->count - 1];
+}
+
 // Both begin() and end() need references to the type...
 
 template <typename T>

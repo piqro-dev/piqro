@@ -22,7 +22,7 @@
 	INST(LESS) \
 	INST(NOT) \
 	INST(CALL) \
-	INST(RET) \
+	INST(RETURN) \
 	INST(JUMP) \
 	INST(JUMP_COND) \
 	INST(NOOP) \
@@ -45,7 +45,7 @@ struct Instruction
 #undef INST
 #define INST(name) case INSTRUCTION_##name: return #name;
 
-static inline const char* to_string(const InstructionType type)
+inline const char* to_string(const InstructionType type)
 {
 	switch (type)
 	{

@@ -14,7 +14,7 @@
 
 inline Trap LOAD_IMMEDIATE(VM* vm, uint16_t idx)
 {
-	if (idx > vm->immediates.count)
+	if (idx >= vm->immediates.count)
 	{
 		return TRAP_OUT_OF_BOUNDS;
 	}
@@ -23,12 +23,16 @@ inline Trap LOAD_IMMEDIATE(VM* vm, uint16_t idx)
 
 	push(&vm->stack, vm->immediates[idx]);
 
+	vm->ic++;
+
 	return TRAP_SUCCESS;
 }
 
 inline Trap LOAD_LOCAL(VM* vm, uint16_t idx)
 {
-	if (idx >= MAX_VARIABLES)
+	idx = peek(&vm->call_frames)->local_base + idx;
+
+	if (idx >= MAX_LOCALS)
 	{
 		return TRAP_OUT_OF_BOUNDS;
 	}
@@ -37,17 +41,16 @@ inline Trap LOAD_LOCAL(VM* vm, uint16_t idx)
 
 	push(&vm->stack, vm->locals[idx]);
 
+	vm->ic++;
+
 	return TRAP_SUCCESS;
 }
 
 inline Trap STORE_LOCAL(VM* vm, uint16_t idx)
 {
-	if (vm->call_frames.count > 0) 
-	{
-		idx += end(vm->call_frames)->local_base;
-	}
+	idx = peek(&vm->call_frames)->local_base + idx;
 
-	if (idx > MAX_VARIABLES || vm->locals.count < idx)
+	if (idx >= MAX_LOCALS)
 	{
 		return TRAP_OUT_OF_BOUNDS;
 	}
@@ -56,14 +59,9 @@ inline Trap STORE_LOCAL(VM* vm, uint16_t idx)
 
 	Value v = *pop(&vm->stack);
 
-	if (vm->locals.count <= idx)
-	{
-		push(&vm->locals, v);
-	}
-	else
-	{
-		vm->locals[idx] = v;
-	}
+	vm->locals[idx] = v;
+
+	vm->ic++;
 
 	return TRAP_SUCCESS;
 }
@@ -75,6 +73,8 @@ inline Trap LOAD_NULL(VM* vm)
 	VERIFY_STACK_OVERFLOW();
 
 	push(&vm->stack, make_value());
+
+	vm->ic++;
 
 	return TRAP_SUCCESS;
 }
@@ -100,15 +100,17 @@ inline Trap LOAD_NULL(VM* vm)
 	{ \
 		VERIFY_STACK_UNDERFLOW(); \
 		\
-		Value* r = pop(&vm->stack); \
+		Value r = *pop(&vm->stack); \
 		\
 		VERIFY_STACK_UNDERFLOW(); \
 		\
-		Value* l = pop(&vm->stack); \
+		Value l = *pop(&vm->stack); \
 		\
 		VERIFY_STACK_OVERFLOW(); \
 		\
-		push(&vm->stack, *l op *r); \
+		push(&vm->stack, l op r); \
+		\
+		vm->ic++; \
 		\
 		return TRAP_SUCCESS; \
 	}
@@ -119,95 +121,112 @@ inline Trap NOT(VM* vm)
 {
 	VERIFY_STACK_UNDERFLOW();
 
-	Value* l = pop(&vm->stack);
+	Value l = *pop(&vm->stack);
 
 	VERIFY_STACK_OVERFLOW();
 
-	push(&vm->stack, !*l);
+	push(&vm->stack, !l);
+
+	vm->ic++;
 
 	return TRAP_SUCCESS;
 }
 
-inline Trap CALL(VM* vm, uint16_t idx)
+inline Trap CALL(VM* vm, uint16_t to)
 {
-	if (vm->call_frames.count >= MAX_STACK_SIZE)
+	if (to >= vm->instructions.count)
+	{
+		return TRAP_OUT_OF_BOUNDS;
+	}
+
+	if (vm->call_frames.count >= MAX_CALL_FRAMES)
 	{
 		return TRAP_STACK_OVERFLOW;
 	}
 
 	CallFrame* cf = push(&vm->call_frames);
 
-	cf->return_ic = vm->ic;
+	cf->return_ic = vm->ic + 1;
 
 	VERIFY_STACK_UNDERFLOW();
 
-	// Top of the stack is the argument count 
-	cf->arg_count = (uint8_t)as_number(pop(&vm->stack));
+	// Argument count on top
+	cf->arg_count = (uint8_t)as_number(*pop(&vm->stack));
+	
+	VERIFY_STACK_UNDERFLOW();
+
+	// Local count comes after
+	cf->local_count = (uint16_t)as_number(*pop(&vm->stack));
+	
+	// Save bases
 	cf->stack_base = vm->stack.count;
 	cf->local_base = vm->locals.count;
 
-	// Push locals
-	for (uint8_t i = 0; i < cf->arg_count; i++)
+	// Push arguments
+	for (uint8_t i = 0; i < cf->arg_count; i++) 
 	{
 		VERIFY_STACK_UNDERFLOW();
-
+		
 		push(&vm->locals, *pop(&vm->stack));
 	}
 
-	vm->ic = idx - 1;
+	// Push locals
+	for (uint8_t i = cf->arg_count; i < cf->local_count; i++) 
+	{
+		push(&vm->locals, make_value());
+	}
+
+	vm->ic = to;
 
 	return TRAP_SUCCESS;
 }
 
-inline Trap RET(VM* vm)
+inline Trap RETURN(VM* vm)
 {
-	const CallFrame* cf = pop(&vm->call_frames);
+	VERIFY_STACK_UNDERFLOW();
 
-	trim_end(&vm->locals, cf->local_base);
-	trim_end(&vm->stack, cf->stack_base);
-
-	Value top = *pop(&vm->stack);
-
-	// All procedures are required to load a value on the stack followed by a RET statement at the end.
-	// If the value on the stack is (undefined), which is our NULL type, we assume no usable value will be
-	// returned.
-	if (top.type != VALUE_UNDEFINED)
+	if (peek(&vm->stack)->type == VALUE_UNDEFINED)
 	{
-		push(&vm->stack, top);
+		pop(&vm->stack);
 	}
 
-	vm->ic = cf->return_ic;
+	if (vm->call_frames.count <= 0)
+	{
+		return TRAP_STACK_UNDERFLOW;
+	}
+
+	const CallFrame cf = *pop(&vm->call_frames);
+
+	trim_end(&vm->stack, cf.stack_base);
+	trim_end(&vm->locals, cf.local_base);
+
+	vm->ic = cf.return_ic;
 
 	return TRAP_SUCCESS;
 }
 
 inline Trap JUMP(VM* vm, uint16_t to)
 {
-	if (to > vm->instructions.count)
+	if (to >= vm->instructions.count)
 	{
 		return TRAP_OUT_OF_BOUNDS;
 	}
 
-	vm->ic = to - 1;
+	vm->ic = to;
 
 	return TRAP_SUCCESS;
 }
 
 inline Trap JUMP_COND(VM* vm, uint16_t to)
 {
-	if (to > vm->instructions.count)
+	if (to >= vm->instructions.count)
 	{
 		return TRAP_OUT_OF_BOUNDS;
 	}
 
 	VERIFY_STACK_UNDERFLOW();
 
-	Value* v = pop(&vm->stack);
-
-	if (as_boolean(v))
-	{
-		vm->ic = to - 1;
-	}	
+	vm->ic = as_boolean(*pop(&vm->stack)) ? to : vm->ic + 1;
 
 	return TRAP_SUCCESS;
 }
@@ -221,8 +240,8 @@ void init(VM* vm, Arena* arena, const Array <Instruction> instructions, const Ar
 	vm->instructions = instructions;
 	vm->immediates = immediates;
 
-	vm->locals = make_array<Value>(arena, MAX_VARIABLES);
 	vm->stack = make_array<Value>(arena, MAX_STACK_SIZE);
+	vm->locals = make_array<Value>(arena, MAX_LOCALS);
 	vm->call_frames = make_array<CallFrame>(arena, MAX_CALL_FRAMES);
 
 	vm->ic = 0;
@@ -321,9 +340,9 @@ Trap execute(VM* vm)
 			r = CALL(vm, i.arg);
 		} break;
 
-		case INSTRUCTION_RET:
+		case INSTRUCTION_RETURN:
 		{
-			r = RET(vm);
+			r = RETURN(vm);
 		} break;
 
 		case INSTRUCTION_JUMP:
@@ -339,6 +358,7 @@ Trap execute(VM* vm)
 		case INSTRUCTION_NOOP:
 		{
 			// ... Do nothing
+			vm->ic++;
 		} break;
 
 		case INSTRUCTION_HALT:
@@ -350,11 +370,6 @@ Trap execute(VM* vm)
 		{
 			r = TRAP_ILLEGAL_INSTRUCTION;
 		} break;
-	}
-
-	if (r == TRAP_SUCCESS)
-	{
-		vm->ic++;
 	}
 
 	return r;

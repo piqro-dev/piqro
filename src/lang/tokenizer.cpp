@@ -330,6 +330,8 @@ void tokenize(Tokenizer* tok, Array <Token>* out)
 
 			case '&':
 			{
+				eat_char(tok);
+
 				if (peek_char(tok) == '&')
 				{
 					eat_char(tok);
@@ -339,6 +341,8 @@ void tokenize(Tokenizer* tok, Array <Token>* out)
 
 			case '|':
 			{
+				eat_char(tok);
+
 				if (peek_char(tok) == '|')
 				{
 					eat_char(tok);

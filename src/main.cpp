@@ -45,7 +45,7 @@ inline void print_instructions(Array <Instruction> instructions)
 		if (it.type == INSTRUCTION_LOAD_IMMEDIATE)
 		{
 			char buf[128] = {};
-			as_string(&gen.immediates[it.arg], buf, 128);
+			as_string(gen.immediates[it.arg], buf, 128);
 
 			println("  %-4d | %-20s %d (%s)", idx, to_string(it.type), it.arg, buf);
 		}
@@ -60,8 +60,6 @@ inline void print_instructions(Array <Instruction> instructions)
 
 		idx++;
 	}
-
-	println("\nGenerated instructions' size: %llu bytes", instructions.count * sizeof(Instruction));
 }
 
 inline void dump_state() 
@@ -74,7 +72,7 @@ inline void dump_state()
 		for (uint16_t i = 0; i < vm.stack.count; i++)
 		{
 			char buf[128] = {};
-			as_string(&vm.stack[i], buf, 128);
+			as_string(vm.stack[i], buf, 128);
 
 			println("    [%d] %s", i, buf);
 		}
@@ -103,7 +101,7 @@ inline void execute_program()
 
 		if (r == TRAP_HALT_EXECUTION)
 		{
-			println("\nVM: Execution halted.");
+			println("\nExecution halted.");
 
 			break;
 		}
@@ -118,7 +116,7 @@ inline void execute_program()
 				[TRAP_ILLEGAL_INSTRUCTION] = "Illegal instruction"
 			};
 
-			errorln("VM: %s.", strings[r]);
+			errorln("Runtime Error: %s.", strings[r]);
 
 			break;
 		}
@@ -130,15 +128,17 @@ static Arena arena;
 
 static constexpr char source[] = 
 R"(
-define hello(x) {
-	return x
+define fact(n)
+{
+	if n <= 1
+	{
+		return 1
+	}
+
+	return n * fact(n - 1)
 }
 
-var a = 10
-var b = hello(a + 2)
-
-a = b
-
+var f = fact(5)
 )";
 
 extern "C" void mainCRTStartup()

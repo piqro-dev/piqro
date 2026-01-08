@@ -12,7 +12,7 @@ inline Token peek_token(const Generator* gen, int16_t offset = 0)
 {
 	if (gen->ptr + offset > gen->tokens.count)
 	{
-		return Token{ TOKEN_UNKNOWN, peek_token(gen, -1).line };
+		return Token{ TOKEN_UNKNOWN, gen->line };
 	}
 
 	return gen->tokens[gen->ptr + offset];
@@ -114,7 +114,7 @@ inline uint16_t get_or_create_immediate(Generator* gen, Value v)
 {
 	for (uint16_t i = 0; i < gen->immediates.count; i++)
 	{
-		if (as_number(&gen->immediates[i]) == as_number(&v))
+		if (as_number(gen->immediates[i]) == as_number(v))
 		{
 			return i;
 		}
@@ -141,9 +141,7 @@ inline void emit_number_expression(Generator* gen)
 	char buf[256] = {};
 	as_string(number, gen->source, buf, 256);
 
-	Value imm = make_value((float)atof(buf));
-
-	emplace(gen->instructions, INSTRUCTION_LOAD_IMMEDIATE, get_or_create_immediate(gen, imm));
+	emplace(gen->instructions, INSTRUCTION_LOAD_IMMEDIATE, get_or_create_immediate(gen, make_value((float)atof(buf))));
 }
 
 inline void emit_identifier_expression(Generator* gen)
@@ -230,7 +228,10 @@ inline void emit_procedure_expression(Generator* gen)
 	// )
 	try_eat_token(gen, TOKEN_CLOSE_PAREN);
 
-	// Push the argument count to be the last
+	// Push the local count
+	emplace(gen->instructions, INSTRUCTION_LOAD_IMMEDIATE, get_or_create_immediate(gen, make_value((float)proc->local_count)));
+
+	// Then the argument count
 	emplace(gen->instructions, INSTRUCTION_LOAD_IMMEDIATE, get_or_create_immediate(gen, make_value((float)proc->arg_count)));
 
 	// Call the procedure
@@ -370,7 +371,7 @@ inline void emit_binary_expression(Generator* gen, int8_t min_precedence = -1)
 		case TOKEN_DOUBLE_AND:  emplace(gen->instructions, INSTRUCTION_AND); break; 
 		case TOKEN_DOUBLE_PIPE: emplace(gen->instructions, INSTRUCTION_OR); break; 
 		
-		default: { error(gen, "TODO: Not implemented: %s", to_string(op.type)); }
+		default: { error(gen, "Expected binary operator, got %s", to_string(op.type)); }
 	}
 
 	// Next token
@@ -387,7 +388,14 @@ inline void emit_expression(Generator* gen)
 {
 	Token expr = peek_token(gen);
 
-	if (expr.type == TOKEN_NUMBER)
+	// Parentheses should come first
+	if (expr.type == TOKEN_OPEN_PAREN)
+	{
+		eat_token(gen);
+		emit_expression(gen);
+		try_eat_token(gen, TOKEN_CLOSE_PAREN);
+	}
+	else if (expr.type == TOKEN_NUMBER)
 	{
 		emit_number_expression(gen);
 	}
@@ -397,7 +405,12 @@ inline void emit_expression(Generator* gen)
 		{
 			emit_procedure_expression(gen);
 		}
-		else if (peek_token(gen, 1).type == TOKEN_EQUALS)
+		else if (peek_token(gen, 1).type == TOKEN_PLUS_EQUALS || 
+			peek_token(gen, 1).type == TOKEN_DASH_EQUALS || 
+			peek_token(gen, 1).type == TOKEN_SLASH_EQUALS || 
+			peek_token(gen, 1).type == TOKEN_STAR_EQUALS || 
+			peek_token(gen, 1).type == TOKEN_PERCENT_EQUALS || 
+			peek_token(gen, 1).type == TOKEN_EQUALS)
 		{
 			emit_assign_expression(gen);
 		}
@@ -409,12 +422,6 @@ inline void emit_expression(Generator* gen)
 	else if (expr.type == TOKEN_TRUE || expr.type == TOKEN_FALSE)
 	{
 		emit_boolean_expression(gen);
-	}
-	else if (expr.type == TOKEN_OPEN_PAREN)
-	{
-		eat_token(gen);
-		emit_expression(gen);
-		try_eat_token(gen, TOKEN_CLOSE_PAREN);
 	}
 	else
 	{
@@ -492,6 +499,15 @@ inline void emit_var_statement(Generator* gen)
 	if (variable_exists(gen, name) || procedure_exists(gen, name)) 
 	{
 		error(gen, "Identifier '%s' redefined", name);
+	}
+
+	if (gen->current_procedure && gen->current_scope == &gen->current_procedure->scope) 
+	{
+		gen->current_procedure->local_count++;
+	}
+	else if (!gen->current_procedure)
+	{
+		gen->top_level_var_count++;
 	}
 
 	// =
@@ -591,7 +607,7 @@ inline void emit_define_statement(Generator* gen)
 	if (!proc->returns_value)
 	{
 		emplace(gen->instructions, INSTRUCTION_LOAD_NULL);
-		emplace(gen->instructions, INSTRUCTION_RET);
+		emplace(gen->instructions, INSTRUCTION_RETURN);
 	}
 
 	// }
@@ -621,7 +637,7 @@ inline void emit_return_statement(Generator* gen)
 	// <expr>
 	emit_expression(gen);
 
-	emplace(gen->instructions, INSTRUCTION_RET);
+	emplace(gen->instructions, INSTRUCTION_RETURN);
 }
 
 inline void patch_breaks(Generator* gen, const Loop* loop) 
@@ -693,7 +709,7 @@ inline void emit_repeat_statement(Generator* gen)
 
 	end_scope(gen, &loop.scope);
 
-	emplace(gen->instructions, INSTRUCTION_JUMP, loop.scope.first_inst);
+	emplace(gen->instructions, INSTRUCTION_JUMP, (uint16_t)(loop.scope.first_inst + 2));
 
 	jump_cond->arg = loop.scope.last_inst + 1; // Last statement + the jump
 
@@ -701,9 +717,47 @@ inline void emit_repeat_statement(Generator* gen)
 	patch_breaks(gen, &loop);
 }
 
+// repeat until <expr> { ... }
 inline void emit_repeat_until_statement(Generator* gen) 
 {
+	// repeat
+	eat_token(gen);
 
+	// until
+	eat_token(gen);
+
+	Loop loop = {};
+
+	uint16_t start = gen->instructions->count;
+
+	// <expr>
+	emit_expression(gen);
+	
+	// {
+	begin_scope(gen, &loop.scope);
+
+	loop.scope.first_inst = start;
+
+	// Is <expr> true? Skip the loop
+	Instruction* jump_cond = emplace(gen->instructions, INSTRUCTION_JUMP_COND);
+
+	gen->current_loop = &loop;
+
+	while (peek_token(gen).type != TOKEN_CLOSE_BRACE)
+	{
+		emit_statement(gen);
+	}
+
+	gen->current_loop = nullptr;
+
+	end_scope(gen, &loop.scope);
+
+	emplace(gen->instructions, INSTRUCTION_JUMP, loop.scope.first_inst);
+
+	jump_cond->arg = loop.scope.last_inst + 1; // Last statement + the jump
+
+	// Patch breaks
+	patch_breaks(gen, &loop);
 }
 
 // forever { ... }
@@ -897,9 +951,15 @@ inline void emit_statement(Generator* gen)
 		if (peek_token(gen, 1).type == TOKEN_OPEN_PAREN)
 		{
 			emit_procedure_expression(gen);
+			pop(gen->instructions); // Pop the LOAD_IMMEDIATE if this is a statement.
 		}
 		// <ident> = <expr>
-		else 
+		else if (peek_token(gen, 1).type == TOKEN_PLUS_EQUALS || 
+			peek_token(gen, 1).type == TOKEN_DASH_EQUALS || 
+			peek_token(gen, 1).type == TOKEN_SLASH_EQUALS || 
+			peek_token(gen, 1).type == TOKEN_STAR_EQUALS || 
+			peek_token(gen, 1).type == TOKEN_PERCENT_EQUALS || 
+			peek_token(gen, 1).type == TOKEN_EQUALS)
 		{
 			emit_assign_expression(gen);
 			pop(gen->instructions); // Pop the LOAD_IMMEDIATE if this is a statement.
@@ -915,10 +975,18 @@ inline void emit_statement(Generator* gen)
 	{
 		emit_return_statement(gen);
 	}
-	// repeat <expr> { ... }
+	
 	else if (peek_token(gen).type == TOKEN_REPEAT)
 	{
-		emit_repeat_statement(gen);
+		if (peek_token(gen, 1).type == TOKEN_UNTIL)
+		{
+			emit_repeat_until_statement(gen);
+		}
+		// repeat <expr> { ... }
+		else
+		{
+			emit_repeat_statement(gen);
+		}
 	}
 	// forever { ... }
 	else if (peek_token(gen).type == TOKEN_FOREVER)
@@ -970,7 +1038,7 @@ void init(Generator* gen, Arena* arena, const char* source, Array <Token> tokens
 	gen->tokens = tokens;
 
 	gen->immediates = make_array<Value>(arena, MAX_IMMEDIATES);
-	gen->variables = make_array<Identifier>(arena, MAX_VARIABLES);
+	gen->variables = make_array<Identifier>(arena, MAX_LOCALS); 
 	gen->procedures = make_array<Procedure>(arena, MAX_PROCEDURES);
 
 	gen->current_procedure = nullptr;
@@ -985,10 +1053,21 @@ void emit_program(Generator* gen, Array <Instruction>* out)
 {
 	gen->instructions = out;
 
+	Instruction* jump = emplace(gen->instructions, INSTRUCTION_JUMP);
+
 	while (gen->ptr < gen->tokens.count)
 	{
 		emit_statement(gen);
 	}
+
+	emplace(gen->instructions, INSTRUCTION_LOAD_NULL);
+	emplace(gen->instructions, INSTRUCTION_RETURN);
+
+	jump->arg = gen->instructions->count;
+
+	emplace(gen->instructions, INSTRUCTION_LOAD_IMMEDIATE, get_or_create_immediate(gen, make_value((float)gen->top_level_var_count)));
+	emplace(gen->instructions, INSTRUCTION_LOAD_IMMEDIATE, get_or_create_immediate(gen, make_value((float)0)));
+	emplace(gen->instructions, INSTRUCTION_CALL, (uint16_t)1);
 
 	// Ensure we terminate the program at the end
 	emplace(gen->instructions, INSTRUCTION_HALT);

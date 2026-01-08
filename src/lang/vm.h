@@ -15,9 +15,12 @@
 struct CallFrame
 {
 	uint16_t return_ic;
-	uint8_t arg_count;
+
 	uint16_t stack_base;
 	uint16_t local_base;
+
+	uint16_t local_count;
+	uint16_t arg_count;
 };
 
 enum Trap : uint8_t
@@ -34,10 +37,10 @@ struct VM
 {
 	Array <Instruction> instructions;
 	Array <Value> immediates;
-	Array <Value> locals;
 	Array <Value> stack;
+	Array <Value> locals;
 	Array <CallFrame> call_frames;
-
+	
 	uint16_t ic;
 };
 
