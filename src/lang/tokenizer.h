@@ -4,7 +4,7 @@
 
 #include <base/util.h>
 
-#include <lang/token.h>
+#include <lang/types.h>
 
 struct Tokenizer
 {

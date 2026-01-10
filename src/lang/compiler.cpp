@@ -84,10 +84,10 @@ void init(Compiler* com, Arena* arena, const char* source)
 	init(&com->gen, arena, com->source, com->tokens);
 
 	com->instructions = make_array<Instruction>(arena, MAX_INSTRUCTIONS);
-	emit_program(&com->gen, &com->instructions);
+	emit(&com->gen, &com->instructions);
 }
 
-void compile_program(Compiler* com, Array <uint8_t>* blob)
+void compile(Compiler* com, Array <uint8_t>* blob)
 {
 	com->blob = blob;
 

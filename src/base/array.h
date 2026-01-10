@@ -7,10 +7,10 @@
 template <typename T>
 struct Array
 {
-	T* elements = nullptr;
+	T* elements;
 
-	size_t count = 0;
-	size_t capacity = 0;
+	size_t count;
+	size_t capacity;
 
 	inline const T& operator[](size_t idx) const { return elements[idx]; }
 	inline T& operator[](size_t idx)             { return elements[idx]; }
@@ -23,6 +23,7 @@ inline Array <T> make_array(Arena* arena, size_t capacity)
 
 	array.capacity = capacity;
 	array.elements = push<T>(arena, array.capacity);
+	array.count = 0;
 
 	return array;
 }
@@ -73,6 +74,12 @@ template <typename T>
 inline T* peek(Array <T>* array) 
 {
 	return &(*array)[array->count - 1];
+}
+
+template <typename T>
+inline void reset(Array <T>* array) 
+{
+	array->count = 0;
 }
 
 // used only for iteration

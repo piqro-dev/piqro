@@ -6,11 +6,11 @@
 
 #include <base/arena.h>
 
-#include <lang/instruction.h>
-
-#include <lang/value.h>
+#include <lang/types.h>
 
 #include <lang/config.h>
+
+struct VM;
 
 struct CallFrame
 {
@@ -23,6 +23,8 @@ struct CallFrame
 	uint16_t arg_count;
 };
 
+typedef void (*NativeProcedure)(VM* vm);
+
 struct ProcedureInfo
 {
 	bool foreign;
@@ -31,6 +33,9 @@ struct ProcedureInfo
 	uint8_t arg_count;
 
 	uint16_t first_inst;
+
+	// only used if foreign is true.
+	NativeProcedure proc;
 };
 
 enum Trap : uint8_t
@@ -41,7 +46,24 @@ enum Trap : uint8_t
 	TRAP_OUT_OF_BOUNDS,
 	TRAP_ILLEGAL_INSTRUCTION,
 	TRAP_HALT_EXECUTION,
+	TRAP_UNDEFINED_FOREIGN,
 };
+
+inline const char* to_string(Trap trap)
+{
+	switch (trap)
+	{
+		case TRAP_SUCCESS: return "Success";
+		case TRAP_STACK_OVERFLOW: return "Stack overflow";
+		case TRAP_STACK_UNDERFLOW: return "Stack underflow";
+		case TRAP_OUT_OF_BOUNDS: return "Out of bounds";
+		case TRAP_ILLEGAL_INSTRUCTION: return "Illegal instruction";
+		case TRAP_HALT_EXECUTION: return "Execution halted";
+		case TRAP_UNDEFINED_FOREIGN: return "Undefined foreign";
+	}
+
+	return "unknown";
+}
 
 struct VM
 {
@@ -66,3 +88,7 @@ struct VM
 void init(VM* vm, Arena* arena, uint8_t* blob, uint16_t blob_size);
 
 Trap execute(VM* vm);
+
+Value get_local(VM* vm, uint8_t index);
+
+void bind_procedure(VM* vm, uint8_t index, NativeProcedure proc);

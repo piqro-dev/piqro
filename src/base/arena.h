@@ -4,10 +4,10 @@
 
 struct Arena
 {
-	uint8_t* buffer;
-	uint8_t* offset;
+	uint8_t* buffer = nullptr;
+	uint8_t* offset = nullptr;
 
-	size_t capacity;
+	size_t capacity = 0;
 };
 
 inline Arena make_arena(uint8_t* buffer, size_t capacity) 

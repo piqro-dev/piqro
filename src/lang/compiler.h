@@ -21,4 +21,4 @@ struct Compiler
 
 void init(Compiler* com, Arena* arena, const char* source);
 
-void compile_program(Compiler* com, Array <uint8_t>* out);
+void compile(Compiler* com, Array <uint8_t>* out);

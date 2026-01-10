@@ -49,6 +49,7 @@ static constexpr struct
 	{ TOKEN_IF,      "if" },
 	{ TOKEN_ELSE,    "else" },
 	{ TOKEN_BREAK,   "break" },
+	{ TOKEN_FOREIGN, "foreign" },
 };
 
 inline Token parse_identifier(Tokenizer* tok)

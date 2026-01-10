@@ -165,14 +165,17 @@ inline void emit_boolean_expression(Generator* gen)
 {
 	Token boolean = eat(gen);
 
-	if (boolean.type == TOKEN_TRUE)
+	bool r = false;
+
+	switch (boolean.type)
 	{
-		emplace(gen->instructions, INSTRUCTION_LOAD_IMMEDIATE, get_or_create_immediate(gen, make_value(true)));
+		case TOKEN_TRUE:  r = true; break;
+		case TOKEN_FALSE: r = false; break;
+
+		default: break;
 	}
-	else if (boolean.type == TOKEN_FALSE)
-	{
-		emplace(gen->instructions, INSTRUCTION_LOAD_IMMEDIATE, get_or_create_immediate(gen, make_value(false)));
-	}
+
+	emplace(gen->instructions, INSTRUCTION_LOAD_IMMEDIATE, get_or_create_immediate(gen, make_value(r)));
 }
 
 // <ident>(<expr>, <expr>...)
@@ -261,6 +264,7 @@ inline void emit_assign_expression(Generator* gen)
 	switch (assign.type)
 	{
 		case TOKEN_EQUALS: break;
+
 		case TOKEN_PLUS_EQUALS:    emplace(gen->instructions, INSTRUCTION_ADD); break;
 		case TOKEN_DASH_EQUALS:    emplace(gen->instructions, INSTRUCTION_SUB); break;
 		case TOKEN_SLASH_EQUALS:   emplace(gen->instructions, INSTRUCTION_DIV); break;
@@ -293,22 +297,22 @@ inline void emit_binary_expression(Generator* gen, int8_t min_precedence = -1)
 
 	switch (op.type)
 	{
-		case TOKEN_PERCENT: emplace(gen->instructions, INSTRUCTION_MOD); break; 
-		case TOKEN_PLUS:    emplace(gen->instructions, INSTRUCTION_ADD); break; 
-		case TOKEN_DASH:    emplace(gen->instructions, INSTRUCTION_SUB); break;
-		case TOKEN_SLASH:   emplace(gen->instructions, INSTRUCTION_DIV); break; 
-		case TOKEN_STAR:    emplace(gen->instructions, INSTRUCTION_MUL); break; 
+		case TOKEN_PERCENT:       emplace(gen->instructions, INSTRUCTION_MOD); break; 
+		case TOKEN_PLUS:          emplace(gen->instructions, INSTRUCTION_ADD); break; 
+		case TOKEN_DASH:          emplace(gen->instructions, INSTRUCTION_SUB); break;
+		case TOKEN_SLASH:         emplace(gen->instructions, INSTRUCTION_DIV); break; 
+		case TOKEN_STAR:          emplace(gen->instructions, INSTRUCTION_MUL); break; 
 
-		case TOKEN_LESS:         emplace(gen->instructions, INSTRUCTION_LESS); break; 
-		case TOKEN_GREATER:      emplace(gen->instructions, INSTRUCTION_GREATER); break; 
-		case TOKEN_LESS_THAN:    emplace(gen->instructions, INSTRUCTION_LESS_THAN); break; 
-		case TOKEN_GREATER_THAN: emplace(gen->instructions, INSTRUCTION_GREATER_THAN); break; 
+		case TOKEN_LESS:          emplace(gen->instructions, INSTRUCTION_LESS); break; 
+		case TOKEN_GREATER:       emplace(gen->instructions, INSTRUCTION_GREATER); break; 
+		case TOKEN_LESS_THAN:     emplace(gen->instructions, INSTRUCTION_LESS_THAN); break; 
+		case TOKEN_GREATER_THAN:  emplace(gen->instructions, INSTRUCTION_GREATER_THAN); break; 
 		
 		case TOKEN_DOUBLE_EQUALS: emplace(gen->instructions, INSTRUCTION_EQUALS); break; 
 		case TOKEN_NOT_EQUALS:    emplace(gen->instructions, INSTRUCTION_EQUALS); emplace(gen->instructions, INSTRUCTION_NOT); break; 
 		
-		case TOKEN_DOUBLE_AND:  emplace(gen->instructions, INSTRUCTION_AND); break; 
-		case TOKEN_DOUBLE_PIPE: emplace(gen->instructions, INSTRUCTION_OR); break; 
+		case TOKEN_DOUBLE_AND:    emplace(gen->instructions, INSTRUCTION_AND); break; 
+		case TOKEN_DOUBLE_PIPE:   emplace(gen->instructions, INSTRUCTION_OR); break; 
 		
 		default: { error(gen, "Expected binary operator, got %s", to_string(op.type)); }
 	}
@@ -327,44 +331,52 @@ inline void emit_expression(Generator* gen)
 {
 	Token expr = peek(gen);
 
-	if (expr.type == TOKEN_DASH)
+	switch (expr.type)
 	{
-		eat(gen);
-		emit_expression(gen);
-		emplace(gen->instructions, INSTRUCTION_NEGATE);
-	}
-	else if (expr.type == TOKEN_OPEN_PAREN)
-	{
-		eat(gen);
-		emit_expression(gen);
-		try_eat(gen, TOKEN_CLOSE_PAREN);
-	}
-	else if (expr.type == TOKEN_NUMBER)
-	{
-		emit_number_expression(gen);
-	}
-	else if (expr.type == TOKEN_IDENTIFIER)
-	{
-		if (peek(gen, 1).type == TOKEN_OPEN_PAREN)
+		case TOKEN_DASH:
 		{
-			emit_procedure_expression(gen);
-		}
-		else if (is_assign_op(peek(gen, 1).type))
+			eat(gen);
+			emit_expression(gen);
+			emplace(gen->instructions, INSTRUCTION_NEGATE);
+		} break;
+
+		case TOKEN_OPEN_PAREN:
 		{
-			emit_assign_expression(gen);
-		}
-		else
+			eat(gen);
+			emit_expression(gen);
+			try_eat(gen, TOKEN_CLOSE_PAREN);
+		} break;
+
+		case TOKEN_NUMBER:
 		{
-			emit_identifier_expression(gen);
-		}
-	}
-	else if (expr.type == TOKEN_TRUE || expr.type == TOKEN_FALSE)
-	{
-		emit_boolean_expression(gen);
-	}
-	else
-	{
-		error(gen, "Expected expression, got %s", to_string(expr.type));
+			emit_number_expression(gen);
+		} break;
+
+		case TOKEN_IDENTIFIER:
+		{
+			if (peek(gen, 1).type == TOKEN_OPEN_PAREN)
+			{
+				emit_procedure_expression(gen);
+			}
+			else if (is_assign_op(peek(gen, 1).type))
+			{
+				emit_assign_expression(gen);
+			}
+			else
+			{
+				emit_identifier_expression(gen);
+			}
+		} break;
+
+		case TOKEN_TRUE ... TOKEN_FALSE:
+		{
+			emit_boolean_expression(gen);
+		} break;
+
+		default:
+		{
+			error(gen, "Expected expression, got %s", to_string(expr.type));
+		} break;
 	}
 
 	if (is_binary_op(peek(gen).type))
@@ -567,7 +579,7 @@ inline void emit_return_statement(Generator* gen)
 	}
 
 	// at some point in the procedure we will return a value that's not UNDEFINED. 
-	// NOTE: Might be an issue if a value is not returned every path
+	// NOTE: might be an issue if a value is not returned every path
 	gen->current_procedure->returns_value = true;
 
 	// return
@@ -877,87 +889,168 @@ inline void emit_break_statement(Generator* gen)
 	emplace(gen->instructions, INSTRUCTION_JUMP, (uint16_t)-1);
 }
 
+// foreign define <ident>(...)
+inline void emit_foreign_define_statement(Generator* gen)
+{
+	// foreign
+	eat(gen);
+
+	// define
+	Token define = try_eat(gen, TOKEN_DEFINE);
+
+	// <ident>
+	Token ident = try_eat(gen, TOKEN_IDENTIFIER);
+
+	Identifier name = {};
+	as_string(ident, gen->source, name, 256);
+
+	if (identifier_too_long(ident))
+	{
+		error(gen, "Identifier '%s' is too long", name);
+	}
+
+	if (variable_exists(gen, name) || procedure_exists(gen, name)) 
+	{
+		error(gen, "Identifier '%s' redefined", name);
+	}
+
+	Procedure* proc = get_or_create_procedure(gen, name);
+
+	proc->foreign = true;
+
+	// (
+	try_eat(gen, TOKEN_OPEN_PAREN);
+
+	// <ident>, <ident>...
+	while (peek(gen).type != TOKEN_CLOSE_PAREN)
+	{
+		// Check for (,<ident>
+		if (peek(gen, -1).type == TOKEN_OPEN_PAREN && peek(gen).type == TOKEN_COMMA)
+		{
+			error(gen, "Expected expression after `(` in foreign procedure declaration, got `,`");
+		}
+
+		// <ident>
+		try_eat(gen, TOKEN_IDENTIFIER);
+
+		proc->arg_count++;
+
+		if (peek(gen).type != TOKEN_CLOSE_PAREN)
+		{
+			// ,
+			try_eat(gen, TOKEN_COMMA);
+	
+			// Check for <ident>,)
+			if (peek(gen).type == TOKEN_CLOSE_PAREN)
+			{
+				error(gen, "Expected expression after `,` in foreign procedure declaration, got `)`");
+			}
+		}
+	}
+
+	// )
+	try_eat(gen, TOKEN_CLOSE_PAREN);
+}
+
 inline void emit_statement(Generator* gen)
 {
-	// var <ident> = <expr>
-	if (peek(gen).type == TOKEN_VAR)
+	switch (peek(gen).type)
 	{
-		emit_var_statement(gen);	
-	}
-	else if (peek(gen).type == TOKEN_IDENTIFIER)
-	{
-		// <ident>(...)
-		if (peek(gen, 1).type == TOKEN_OPEN_PAREN)
+		// var <ident> = <expr>
+		case TOKEN_VAR:
 		{
-			emit_procedure_expression(gen);
-			pop(gen->instructions); // pop the LOAD_IMMEDIATE if this is a statement.
-		}
-		// <ident> = <expr>
-		else if (is_assign_op(peek(gen, 1).type))			
+			emit_var_statement(gen);
+		} break;
+
+		case TOKEN_IDENTIFIER:
 		{
-			emit_assign_expression(gen);
-			pop(gen->instructions); // pop the LOAD_IMMEDIATE if this is a statement.
-		}
-	}
-	// define <ident>(...) { ... }
-	else if (peek(gen).type == TOKEN_DEFINE)
-	{
-		emit_define_statement(gen);
-	}
-	// return <expr>
-	else if (peek(gen).type == TOKEN_RETURN)
-	{
-		emit_return_statement(gen);
-	}
-	
-	else if (peek(gen).type == TOKEN_REPEAT)
-	{
-		if (peek(gen, 1).type == TOKEN_UNTIL)
+			// <ident>(...)
+			if (peek(gen, 1).type == TOKEN_OPEN_PAREN)
+			{
+				emit_procedure_expression(gen);
+			}
+			// <ident> = <expr>
+			else if (is_assign_op(peek(gen, 1).type))			
+			{
+				emit_assign_expression(gen);
+				pop(gen->instructions); // pop the LOAD_IMMEDIATE if this is a statement.
+			}
+		} break;
+
+		// foreign define <ident>(...)
+		case TOKEN_FOREIGN:
 		{
-			emit_repeat_until_statement(gen);
-		}
-		// repeat <expr> { ... }
-		else
+			emit_foreign_define_statement(gen);
+		} break;
+
+		// define <ident>(...) { ... }
+		case TOKEN_DEFINE:
 		{
-			emit_repeat_statement(gen);
-		}
-	}
-	// forever { ... }
-	else if (peek(gen).type == TOKEN_FOREVER)
-	{
-		emit_forever_statement(gen);
-	}
-	// if <expr> { ... } else if <expr> { ... } else { ... }
-	else if (peek(gen).type == TOKEN_IF)
-	{
-		emit_if_statement(gen);
-	}
-	// break
-	else if (peek(gen).type == TOKEN_BREAK)
-	{
-		emit_break_statement(gen);
-	}
-	// both of these statements cannot exist without an if statement, so these are
-	// handled above. 
-	else if (peek(gen).type == TOKEN_ELSE)
-	{
-		if (peek(gen, 1).type == TOKEN_IF)
+			emit_define_statement(gen);
+		} break;
+
+		// return <expr>
+		case TOKEN_RETURN:
 		{
-			error(gen, "Expected if statement before else if.");
-		}
-		else
+			emit_return_statement(gen);
+		} break;
+
+		case TOKEN_REPEAT:
 		{
-			error(gen, "Expected if or else if statement before else.");
-		}
-	}
-	// { ... }
-	else if (peek(gen).type == TOKEN_OPEN_BRACE)
-	{
-		emit_scope(gen);
-	}
-	else
-	{
-		error(gen, "Expected statement, got %s", to_string(peek(gen).type));
+			// repeat until <expr> { ... }
+			if (peek(gen, 1).type == TOKEN_UNTIL)
+			{
+				emit_repeat_until_statement(gen);
+			}
+			// repeat <expr> { ... }
+			else
+			{
+				emit_repeat_statement(gen);
+			}
+		} break;
+
+		// forever { ... }
+		case TOKEN_FOREVER:
+		{
+			emit_forever_statement(gen);
+		} break;
+
+		// break
+		case TOKEN_BREAK:
+		{
+			emit_break_statement(gen);
+		} break;
+
+		// if <expr> { ... } else if <expr> { ... } else { ... }
+		case TOKEN_IF:
+		{
+			emit_if_statement(gen);
+		} break;
+
+		// { ... }
+		case TOKEN_OPEN_BRACE:
+		{
+			emit_scope(gen);
+		} break;
+
+		// both of these statements cannot exist without an if statement, so these are
+		// handled above. 
+		case TOKEN_ELSE:
+		{
+			if (peek(gen, 1).type == TOKEN_IF)
+			{
+				error(gen, "Expected if statement before else if.");
+			}
+			else
+			{
+				error(gen, "Expected if or else if statement before else.");
+			}
+		} break;
+
+		default:
+		{
+			error(gen, "Expected statement, got %s", to_string(peek(gen).type));
+		} break;
 	}
 }
 
@@ -983,7 +1076,7 @@ void init(Generator* gen, Arena* arena, const char* source, Array <Token> tokens
 	gen->ptr = 0;
 }
 
-void emit_program(Generator* gen, Array <Instruction>* out)
+void emit(Generator* gen, Array <Instruction>* out)
 {
 	gen->instructions = out;
 

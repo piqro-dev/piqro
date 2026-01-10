@@ -143,7 +143,7 @@ inline Trap CALL(VM* vm, uint16_t idx)
 	
 	cf->stack_base = vm->stack.count;
 	cf->local_base = vm->locals.count;
-
+	
 	// push arguments
 	for (uint8_t i = 0; i < cf->arg_count; i++) 
 	{
@@ -152,13 +152,37 @@ inline Trap CALL(VM* vm, uint16_t idx)
 		push(&vm->locals, *pop(&vm->stack));
 	}
 
-	// push locals
-	for (uint8_t i = cf->arg_count; i < cf->local_count; i++) 
+	if (!pi.foreign)
 	{
-		push(&vm->locals, make_value());
+		// push locals
+		for (uint8_t i = cf->arg_count; i < cf->local_count; i++) 
+		{
+			push(&vm->locals, make_value());
+		}
+		
+		vm->ip = pi.first_inst;
 	}
+	else
+	{
+		if (!pi.proc)
+		{
+			return TRAP_UNDEFINED_FOREIGN;
+		}
 
-	vm->ip = pi.first_inst;
+		pi.proc(vm);
+
+		if (peek(&vm->stack)->type == VALUE_UNDEFINED)
+		{
+			pop(&vm->stack);
+		}
+
+		const CallFrame cf = *pop(&vm->call_frames);
+
+		trim_end(&vm->stack, cf.stack_base);
+		trim_end(&vm->locals, cf.local_base);
+
+		vm->ip++;
+	}
 
 	return TRAP_SUCCESS;
 }
@@ -334,6 +358,15 @@ inline Trap RETURN(VM* vm)
 	return TRAP_SUCCESS;
 }
 
+inline Trap HALT(VM* vm)
+{
+	reset(&vm->stack);
+	reset(&vm->locals);
+	reset(&vm->call_frames);
+
+	return TRAP_HALT_EXECUTION;
+}
+
 void init(VM* vm, Arena* arena, uint8_t* blob, uint16_t blob_size)
 {
 	vm->ip = 0;
@@ -387,10 +420,24 @@ Trap execute(VM* vm)
 		case INSTRUCTION_NOT:            r = NOT(vm); break;
 		case INSTRUCTION_NEGATE:         r = NEGATE(vm); break;
 		case INSTRUCTION_RETURN:         r = RETURN(vm); break;
-		case INSTRUCTION_HALT:           r = TRAP_HALT_EXECUTION; break;
+		case INSTRUCTION_HALT:           r = HALT(vm); break;
 
 		default:                         r = TRAP_ILLEGAL_INSTRUCTION; break;
 	}
 
 	return r;
+}
+
+Value get_local(VM* vm, uint8_t index)
+{
+	ASSERT(index < vm->locals.count);
+
+	return vm->locals[peek(&vm->call_frames)->local_base + index];
+}
+
+void bind_procedure(VM* vm, uint8_t index, NativeProcedure proc)
+{
+	ASSERT(index < vm->procedure_infos.count);
+
+	vm->procedure_infos[index].proc = proc;
 }

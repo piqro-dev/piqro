@@ -2,16 +2,9 @@
 
 #include <base/common.h>
 
-#if defined __wasm__ 
-	#define STB_SPRINTF_IMPLEMENTATION
-	#define STB_SPRINTF_DECORATE(name) name
-	
-	#include <third_party/stb_sprintf.h>
-#endif
-
 #if defined __wasm__
-	namespace js { extern "C" void console_log(const char *); }
-	namespace js { extern "C" void console_error(const char *); }
+	extern "C" void js_console_log(const char *);
+	extern "C" void js_console_error(const char *);
 #endif
 
 __attribute__((format(printf, 1, 2)))
@@ -26,7 +19,7 @@ inline void println(const char* fmt, ...)
 	__builtin_va_end(args);
 
 	#if defined __wasm__
-		js::console_log(out);
+		js_console_log(out);
 	#elif defined _WIN32
 		__builtin_printf("%s\n", out);
 	#endif
@@ -44,7 +37,7 @@ inline void errorln(const char* fmt, ...)
 	__builtin_va_end(args);
 
 	#if defined __wasm__
-		js::console_error(out);
+		js_console_error(out);
 		__builtin_trap();
 	#elif defined _WIN32
 		__builtin_printf("\e[91m%s\e[0m\n", out);

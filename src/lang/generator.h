@@ -6,9 +6,7 @@
 
 #include <base/arena.h>
 
-#include <lang/value.h>
-
-#include <lang/instruction.h>
+#include <lang/types.h>
 
 #include <lang/config.h>
 
@@ -66,4 +64,4 @@ struct Generator
 
 void init(Generator* gen, Arena* arena, const char* source, Array <Token> tokens);
 
-void emit_program(Generator* gen, Array <Instruction>* out);
+void emit(Generator* gen, Array <Instruction>* out);
