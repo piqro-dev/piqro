@@ -75,7 +75,8 @@ inline T* peek(Array <T>* array)
 	return &(*array)[array->count - 1];
 }
 
-// Both begin() and end() need references to the type...
+// used only for iteration
+// both begin() and end() need references to the type...
 
 template <typename T>
 inline T* begin(Array <T>& array)

@@ -15,7 +15,7 @@
 #endif
 
 __attribute__((format(printf, 1, 2)))
-static inline void println(const char* fmt, ...)
+inline void println(const char* fmt, ...)
 {
 	__builtin_va_list args;
 
@@ -33,7 +33,7 @@ static inline void println(const char* fmt, ...)
 }
 
 __attribute__((format(printf, 1, 2)))
-static inline void errorln(const char* fmt, ...)
+inline void errorln(const char* fmt, ...)
 {
 	__builtin_va_list args;
 

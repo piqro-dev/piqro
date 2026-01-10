@@ -1,5 +1,102 @@
 #include <lang/vm.h>
 
+template <typename T>
+inline T read(VM* vm)
+{
+	T v = {};
+
+	__builtin_memcpy(&v, vm->blob + vm->bp, sizeof(T));
+	vm->bp += sizeof(T);
+
+	return v;
+}
+
+inline void read_magic(VM* vm)
+{
+	uint32_t magic = read<uint32_t>(vm);
+
+	if (magic != __builtin_bswap32('PIQR'))
+	{
+		errorln("Error: Invalid magic");
+	}
+}
+
+inline void read_immediates(VM* vm, Arena* arena)
+{
+	uint8_t count = read<uint8_t>(vm);
+
+	vm->immediates = make_array<Value>(arena, count);
+
+	for (uint8_t i = 0; i < count; i++)
+	{
+		Value v = {};
+
+		v.type = read<ValueType>(vm);
+
+		switch (v.type)
+		{
+			case VALUE_UNDEFINED: break;
+			
+			case VALUE_NUMBER:  v.number  = read<float>(vm); break; 
+			case VALUE_BOOLEAN: v.boolean = read<bool>(vm); break; 
+
+			case VALUE_STRING:
+			{
+				uint8_t len = 0;
+
+				while (v.string[len])
+				{
+					v.string[len++] = read<char>(vm);
+				}
+			} break;
+
+			default: { errorln("Error: Invalid value type"); };
+		}
+
+		push(&vm->immediates, v);
+	}
+}
+
+inline void read_procedures(VM* vm, Arena* arena)
+{
+	uint8_t count = read<uint8_t>(vm);
+
+	vm->procedure_infos = make_array<ProcedureInfo>(arena, count);
+
+	for (uint8_t i = 0; i < vm->procedure_infos.capacity; i++)
+	{
+		ProcedureInfo pi = {};
+
+		pi.foreign = read<bool>(vm);
+		pi.local_count = read<uint8_t>(vm);
+		pi.arg_count = read<uint8_t>(vm);
+		pi.first_inst = read<uint16_t>(vm);
+	
+		push(&vm->procedure_infos, pi);
+	}
+}
+
+inline void read_instructions(VM* vm, Arena* arena)
+{
+	uint16_t count = read<uint16_t>(vm);
+
+	vm->instructions = make_array<Instruction>(arena, count);
+
+	for (uint16_t i = 0; i < vm->instructions.capacity; i++)
+	{
+		Instruction it = {};
+
+		it.type = read<InstructionType>(vm);
+
+		if (needs_argument(it.type))
+		{
+			it.arg = read<uint16_t>(vm);
+		}
+
+		push(&vm->instructions, it);
+	}
+}
+
 #define VERIFY_STACK_OVERFLOW() \
 	if (vm->stack.count >= MAX_STACK_SIZE) \
 	{ \
@@ -12,6 +109,60 @@
 		return TRAP_STACK_UNDERFLOW; \
 	}
 
+inline Trap LOAD_NULL(VM* vm)
+{
+	VERIFY_STACK_OVERFLOW();
+
+	push(&vm->stack, make_value());
+
+	vm->ip++;
+
+	return TRAP_SUCCESS;
+}
+
+inline Trap CALL(VM* vm, uint16_t idx)
+{
+	if (idx >= vm->procedure_infos.count)
+	{
+		return TRAP_OUT_OF_BOUNDS;
+	}
+
+	if (vm->call_frames.count >= MAX_CALL_FRAMES)
+	{
+		return TRAP_STACK_OVERFLOW;
+	}
+	
+	ProcedureInfo pi = vm->procedure_infos[idx];
+
+	CallFrame* cf = push(&vm->call_frames);
+
+	cf->return_ip = vm->ip + 1;
+
+	cf->arg_count = pi.arg_count;
+	cf->local_count = pi.local_count;
+	
+	cf->stack_base = vm->stack.count;
+	cf->local_base = vm->locals.count;
+
+	// push arguments
+	for (uint8_t i = 0; i < cf->arg_count; i++) 
+	{
+		VERIFY_STACK_UNDERFLOW();
+		
+		push(&vm->locals, *pop(&vm->stack));
+	}
+
+	// push locals
+	for (uint8_t i = cf->arg_count; i < cf->local_count; i++) 
+	{
+		push(&vm->locals, make_value());
+	}
+
+	vm->ip = pi.first_inst;
+
+	return TRAP_SUCCESS;
+}
+
 inline Trap LOAD_IMMEDIATE(VM* vm, uint16_t idx)
 {
 	if (idx >= vm->immediates.count)
@@ -23,7 +174,7 @@ inline Trap LOAD_IMMEDIATE(VM* vm, uint16_t idx)
 
 	push(&vm->stack, vm->immediates[idx]);
 
-	vm->ic++;
+	vm->ip++;
 
 	return TRAP_SUCCESS;
 }
@@ -41,7 +192,7 @@ inline Trap LOAD_LOCAL(VM* vm, uint16_t idx)
 
 	push(&vm->stack, vm->locals[idx]);
 
-	vm->ic++;
+	vm->ip++;
 
 	return TRAP_SUCCESS;
 }
@@ -61,26 +212,38 @@ inline Trap STORE_LOCAL(VM* vm, uint16_t idx)
 
 	vm->locals[idx] = v;
 
-	vm->ic++;
+	vm->ip++;
 
 	return TRAP_SUCCESS;
 }
 
-// TODO: Load proc
-
-inline Trap LOAD_NULL(VM* vm)
+inline Trap JUMP(VM* vm, uint16_t to)
 {
-	VERIFY_STACK_OVERFLOW();
+	if (to >= vm->instructions.count)
+	{
+		return TRAP_OUT_OF_BOUNDS;
+	}
 
-	push(&vm->stack, make_value());
-
-	vm->ic++;
+	vm->ip = to;
 
 	return TRAP_SUCCESS;
 }
 
-// These ones are very repetative
+inline Trap JUMP_COND(VM* vm, uint16_t to)
+{
+	if (to >= vm->instructions.count)
+	{
+		return TRAP_OUT_OF_BOUNDS;
+	}
 
+	VERIFY_STACK_UNDERFLOW();
+
+	vm->ip = as_boolean(*pop(&vm->stack)) ? to : vm->ip + 1;
+
+	return TRAP_SUCCESS;
+}
+
+// these ones are very repetative
 #define DEFINE_OPS \
 	OP(ADD, +) \
 	OP(SUB, -) \
@@ -110,7 +273,7 @@ inline Trap LOAD_NULL(VM* vm)
 		\
 		push(&vm->stack, l op r); \
 		\
-		vm->ic++; \
+		vm->ip++; \
 		\
 		return TRAP_SUCCESS; \
 	}
@@ -127,56 +290,22 @@ inline Trap NOT(VM* vm)
 
 	push(&vm->stack, !l);
 
-	vm->ic++;
+	vm->ip++;
 
 	return TRAP_SUCCESS;
 }
 
-inline Trap CALL(VM* vm, uint16_t to)
+inline Trap NEGATE(VM* vm)
 {
-	if (to >= vm->instructions.count)
-	{
-		return TRAP_OUT_OF_BOUNDS;
-	}
-
-	if (vm->call_frames.count >= MAX_CALL_FRAMES)
-	{
-		return TRAP_STACK_OVERFLOW;
-	}
-
-	CallFrame* cf = push(&vm->call_frames);
-
-	cf->return_ic = vm->ic + 1;
-
 	VERIFY_STACK_UNDERFLOW();
 
-	// Argument count on top
-	cf->arg_count = (uint8_t)as_number(*pop(&vm->stack));
-	
-	VERIFY_STACK_UNDERFLOW();
+	Value l = *pop(&vm->stack);
 
-	// Local count comes after
-	cf->local_count = (uint16_t)as_number(*pop(&vm->stack));
-	
-	// Save bases
-	cf->stack_base = vm->stack.count;
-	cf->local_base = vm->locals.count;
+	VERIFY_STACK_OVERFLOW();
 
-	// Push arguments
-	for (uint8_t i = 0; i < cf->arg_count; i++) 
-	{
-		VERIFY_STACK_UNDERFLOW();
-		
-		push(&vm->locals, *pop(&vm->stack));
-	}
+	push(&vm->stack, l * make_value(-1.0f));
 
-	// Push locals
-	for (uint8_t i = cf->arg_count; i < cf->local_count; i++) 
-	{
-		push(&vm->locals, make_value());
-	}
-
-	vm->ic = to;
+	vm->ip++;
 
 	return TRAP_SUCCESS;
 }
@@ -200,176 +329,67 @@ inline Trap RETURN(VM* vm)
 	trim_end(&vm->stack, cf.stack_base);
 	trim_end(&vm->locals, cf.local_base);
 
-	vm->ic = cf.return_ic;
+	vm->ip = cf.return_ip;
 
 	return TRAP_SUCCESS;
 }
 
-inline Trap JUMP(VM* vm, uint16_t to)
+void init(VM* vm, Arena* arena, uint8_t* blob, uint16_t blob_size)
 {
-	if (to >= vm->instructions.count)
+	vm->ip = 0;
+	vm->bp = 0;
+
+	vm->blob = blob;
+	vm->blob_size = blob_size;
+
+	if (vm->blob_size > MAX_BLOB_SIZE)
 	{
-		return TRAP_OUT_OF_BOUNDS;
+		errorln("Error: Provided blob is too big.");
 	}
 
-	vm->ic = to;
-
-	return TRAP_SUCCESS;
-}
-
-inline Trap JUMP_COND(VM* vm, uint16_t to)
-{
-	if (to >= vm->instructions.count)
-	{
-		return TRAP_OUT_OF_BOUNDS;
-	}
-
-	VERIFY_STACK_UNDERFLOW();
-
-	vm->ic = as_boolean(*pop(&vm->stack)) ? to : vm->ic + 1;
-
-	return TRAP_SUCCESS;
-}
-
-//
-// Public
-//
-
-void init(VM* vm, Arena* arena, const Array <Instruction> instructions, const Array <Value> immediates)
-{
-	vm->instructions = instructions;
-	vm->immediates = immediates;
-
+	vm->call_frames = make_array<CallFrame>(arena, MAX_CALL_FRAMES);
 	vm->stack = make_array<Value>(arena, MAX_STACK_SIZE);
 	vm->locals = make_array<Value>(arena, MAX_LOCALS);
-	vm->call_frames = make_array<CallFrame>(arena, MAX_CALL_FRAMES);
 
-	vm->ic = 0;
+	read_magic(vm);
+
+	read_immediates(vm, arena);
+	read_procedures(vm, arena);
+	read_instructions(vm, arena);
 }
 
 Trap execute(VM* vm)
 {
 	Trap r = TRAP_SUCCESS;
 
-	Instruction i = vm->instructions[vm->ic];
+	Instruction it = vm->instructions[vm->ip];
 
-	switch (i.type) 
+	switch (it.type)
 	{
-		case INSTRUCTION_LOAD_IMMEDIATE:
-		{
-			r = LOAD_IMMEDIATE(vm, i.arg);
-		} break;
-	
-		case INSTRUCTION_LOAD_LOCAL:
-		{
-			r = LOAD_LOCAL(vm, i.arg);	
-		} break;
-	
-		case INSTRUCTION_STORE_LOCAL:
-		{
-			r = STORE_LOCAL(vm, i.arg);	
-		} break;
-	
-		case INSTRUCTION_LOAD_NULL:
-		{
-			r = LOAD_NULL(vm);	
-		} break;
+		case INSTRUCTION_CALL:           r = CALL(vm, it.arg); break;
+		case INSTRUCTION_LOAD_NULL:      r = LOAD_NULL(vm);break;
+		case INSTRUCTION_LOAD_IMMEDIATE: r = LOAD_IMMEDIATE(vm, it.arg); break;
+		case INSTRUCTION_LOAD_LOCAL:     r = LOAD_LOCAL(vm, it.arg); break;
+		case INSTRUCTION_STORE_LOCAL:    r = STORE_LOCAL(vm, it.arg); break;
+		case INSTRUCTION_JUMP:           r = JUMP(vm, it.arg); break;
+		case INSTRUCTION_JUMP_COND:      r = JUMP_COND(vm, it.arg); break;
+		case INSTRUCTION_ADD:            r = ADD(vm); break;
+		case INSTRUCTION_SUB:            r = SUB(vm); break;
+		case INSTRUCTION_DIV:            r = DIV(vm); break;
+		case INSTRUCTION_MUL:            r = MUL(vm); break;
+		case INSTRUCTION_MOD:            r = MOD(vm); break;
+		case INSTRUCTION_OR:             r = OR(vm); break;
+		case INSTRUCTION_GREATER_THAN:   r = GREATER_THAN(vm); break;
+		case INSTRUCTION_LESS_THAN:      r = LESS_THAN(vm); break;
+		case INSTRUCTION_EQUALS:         r = EQUALS(vm); break;
+		case INSTRUCTION_GREATER:        r = GREATER(vm); break;
+		case INSTRUCTION_LESS:           r = LESS(vm); break;
+		case INSTRUCTION_NOT:            r = NOT(vm); break;
+		case INSTRUCTION_NEGATE:         r = NEGATE(vm); break;
+		case INSTRUCTION_RETURN:         r = RETURN(vm); break;
+		case INSTRUCTION_HALT:           r = TRAP_HALT_EXECUTION; break;
 
-		case INSTRUCTION_ADD:
-		{
-			r = ADD(vm);
-		} break;
-
-		case INSTRUCTION_SUB:
-		{
-			r = SUB(vm);
-		} break;
-
-		case INSTRUCTION_DIV:
-		{
-			r = DIV(vm);
-		} break;
-
-		case INSTRUCTION_MUL:
-		{
-			r = MUL(vm);
-		} break;
-
-		case INSTRUCTION_MOD:
-		{
-			r = MOD(vm);
-		} break;
-
-		case INSTRUCTION_OR:
-		{
-			r = OR(vm);
-		} break;
-
-		case INSTRUCTION_GREATER_THAN:
-		{
-			r = GREATER_THAN(vm);
-		} break;
-
-		case INSTRUCTION_LESS_THAN:
-		{
-			r = LESS_THAN(vm);
-		} break;
-
-		case INSTRUCTION_EQUALS:
-		{
-			r = EQUALS(vm);
-		} break;
-
-		case INSTRUCTION_GREATER:
-		{
-			r = GREATER(vm);
-		} break;
-
-		case INSTRUCTION_LESS:
-		{
-			r = LESS(vm);
-		} break;
-
-		case INSTRUCTION_NOT:
-		{
-			r = NOT(vm);
-		} break;
-
-		case INSTRUCTION_CALL:
-		{
-			r = CALL(vm, i.arg);
-		} break;
-
-		case INSTRUCTION_RETURN:
-		{
-			r = RETURN(vm);
-		} break;
-
-		case INSTRUCTION_JUMP:
-		{
-			r = JUMP(vm, i.arg);
-		} break;
-
-		case INSTRUCTION_JUMP_COND:
-		{
-			r = JUMP_COND(vm, i.arg);
-		} break;
-
-		case INSTRUCTION_NOOP:
-		{
-			// ... Do nothing
-			vm->ic++;
-		} break;
-
-		case INSTRUCTION_HALT:
-		{
-			r = TRAP_HALT_EXECUTION;
-		} break;
-
-		default:
-		{
-			r = TRAP_ILLEGAL_INSTRUCTION;
-		} break;
+		default:                         r = TRAP_ILLEGAL_INSTRUCTION; break;
 	}
 
 	return r;

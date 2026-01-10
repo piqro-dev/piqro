@@ -2,7 +2,7 @@
 
 #include <lang/tokenizer.h>
 
-inline char peek_char(const Tokenizer* tok, int16_t offset = 0) 
+inline char peek(const Tokenizer* tok, int16_t offset = 0) 
 {
 	if (tok->ptr + offset > __builtin_strlen(tok->source)) 
 	{
@@ -12,7 +12,7 @@ inline char peek_char(const Tokenizer* tok, int16_t offset = 0)
 	return tok->source[tok->ptr + offset];
 }
 
-inline char eat_char(Tokenizer* tok)
+inline char eat(Tokenizer* tok)
 {
 	return tok->source[tok->ptr++];
 }
@@ -59,27 +59,22 @@ inline Token parse_identifier(Tokenizer* tok)
 	t.start = tok->ptr;
 	t.line = tok->line;
 
-	eat_char(tok);
+	eat(tok);
 	
-	while (is_alnum(peek_char(tok)) || peek_char(tok) == '_') 
+	while (is_alnum(peek(tok)) || peek(tok) == '_') 
 	{ 
-		eat_char(tok); 
+		eat(tok); 
 	}
 	
 	t.end = tok->ptr;
 
-	// Reassign type if it is a keyword
-	const auto equals = [&](const char* name)
+	// reassign type if it is a keyword
+	for (const auto& name : KEYWORDS)
 	{
 		char buf[128] = {};
 		as_string(t, tok->source, buf, 128);
 
-		return __builtin_strcmp(buf, name) == 0;
-	};
-
-	for (const auto& name : KEYWORDS)
-	{
-		if (equals(name.name))
+		if (__builtin_strcmp(buf, name.name) == 0)
 		{
 			t.type = name.type;
 			break;
@@ -97,26 +92,32 @@ inline Token parse_number(Tokenizer* tok)
 	t.start = tok->ptr;
 	t.line = tok->line;
 
+	// first character may be a minus
+	if (peek(tok) == '-')
+	{
+		eat(tok);
+	}
+
 	bool decimal = false;
 
-	// First character may be the decimal point
-	if (peek_char(tok) == '.')
+	// the first/second character may be the decimal point
+	if (peek(tok) == '.')
 	{
 		decimal = true;
 
-		// Bail out early if the next character isn't a number
-		if (!is_number(peek_char(tok, 1))) 
+		// bail out early if the next character isn't a number
+		if (!is_number(peek(tok, 1))) 
 		{
-			// TODO: Better diagnostics, something like "unexpected `.` near <token>""
-			error(tok, "Unexpected `.`");
+			error(tok, "Unexpected %c", peek(tok));
 		}
+
+		eat(tok);
 	}
 
-	eat_char(tok);
-
-	while (is_number(peek_char(tok)) || peek_char(tok) == '.')
+	// start looping
+	while (is_number(peek(tok)) || peek(tok) == '.')
 	{ 
-		if (peek_char(tok) == '.')
+		if (peek(tok) == '.')
 		{
 			if (!decimal)
 			{
@@ -128,7 +129,7 @@ inline Token parse_number(Tokenizer* tok)
 			}
 		} 
 
-		eat_char(tok);
+		eat(tok);
 	}
 	
 	t.end = tok->ptr;
@@ -144,11 +145,11 @@ inline Token parse_string(Tokenizer* tok)
 	t.start = tok->ptr;
 	t.line = tok->line;
 	
-	eat_char(tok);
+	eat(tok);
 
-	while (eat_char(tok) != '\'')
+	while (eat(tok) != '\'')
 	{
-		if (!peek_char(tok))
+		if (!peek(tok))
 		{
 			error(tok, "Expected `'` to close string literal");
 		}
@@ -172,7 +173,7 @@ void tokenize(Tokenizer* tok, Array <Token>* out)
 
 	while (tok->ptr < source_length)
 	{
-		switch (peek_char(tok))
+		switch (peek(tok))
 		{
 			case '\n':
 			{
@@ -182,16 +183,16 @@ void tokenize(Tokenizer* tok, Array <Token>* out)
 			case '\t':
 			case ' ':
 			{
-				eat_char(tok);
+				eat(tok);
 			} break;
 
 			case '<':
 			{
-				eat_char(tok);
+				eat(tok);
 
-				if (peek_char(tok) == '=')
+				if (peek(tok) == '=')
 				{
-					eat_char(tok);
+					eat(tok);
 					emplace(out, TOKEN_LESS_THAN, tok->line);	
 				}
 				else
@@ -202,11 +203,11 @@ void tokenize(Tokenizer* tok, Array <Token>* out)
 
 			case '>':
 			{
-				eat_char(tok);
+				eat(tok);
 
-				if (peek_char(tok) == '=')
+				if (peek(tok) == '=')
 				{
-					eat_char(tok);
+					eat(tok);
 					emplace(out, TOKEN_GREATER_THAN, tok->line);	
 				}
 				else
@@ -217,11 +218,11 @@ void tokenize(Tokenizer* tok, Array <Token>* out)
 
 			case '%':
 			{
-				eat_char(tok);
+				eat(tok);
 
-				if (peek_char(tok) == '=')
+				if (peek(tok) == '=')
 				{
-					eat_char(tok);
+					eat(tok);
 					emplace(out, TOKEN_PERCENT_EQUALS, tok->line);	
 				}
 				else
@@ -232,11 +233,11 @@ void tokenize(Tokenizer* tok, Array <Token>* out)
 
 			case '+':
 			{
-				eat_char(tok);
+				eat(tok);
 
-				if (peek_char(tok) == '=')
+				if (peek(tok) == '=')
 				{
-					eat_char(tok);
+					eat(tok);
 					emplace(out, TOKEN_PLUS_EQUALS, tok->line);	
 				}
 				else
@@ -247,34 +248,38 @@ void tokenize(Tokenizer* tok, Array <Token>* out)
 
 			case '-':
 			{
-				eat_char(tok);
-
-				if (peek_char(tok) == '=')
+				if (is_number(peek(tok, 1)) || peek(tok, 1) == '.')
 				{
-					eat_char(tok);
+					emplace(out, parse_number(tok));
+				}
+				else if (peek(tok) == '=')
+				{
+					eat(tok);
+					eat(tok);
 					emplace(out, TOKEN_DASH_EQUALS, tok->line);	
 				}
 				else
 				{
+					eat(tok);
 					emplace(out, TOKEN_DASH, tok->line);		
 				}
 			} break;
 
 			case '/':
 			{
-				eat_char(tok);
+				eat(tok);
 
-				// Comment
-				if (peek_char(tok) == '/')
+				// comment
+				if (peek(tok) == '/')
 				{
-					while (peek_char(tok) != '\n')
+					while (peek(tok) != '\n')
 					{
-						eat_char(tok);
+						eat(tok);
 					}
 				}
-				else if (peek_char(tok) == '=')
+				else if (peek(tok) == '=')
 				{
-					eat_char(tok);
+					eat(tok);
 					emplace(out, TOKEN_SLASH_EQUALS, tok->line);	
 				}
 				else
@@ -285,11 +290,11 @@ void tokenize(Tokenizer* tok, Array <Token>* out)
 
 			case '*':
 			{
-				eat_char(tok);
+				eat(tok);
 
-				if (peek_char(tok) == '=')
+				if (peek(tok) == '=')
 				{
-					eat_char(tok);
+					eat(tok);
 					emplace(out, TOKEN_STAR_EQUALS, tok->line);	
 				}
 				else
@@ -300,11 +305,11 @@ void tokenize(Tokenizer* tok, Array <Token>* out)
 
 			case '!':
 			{
-				eat_char(tok);
+				eat(tok);
 
-				if (peek_char(tok) == '=')
+				if (peek(tok) == '=')
 				{
-					eat_char(tok);
+					eat(tok);
 					emplace(out, TOKEN_NOT_EQUALS, tok->line);	
 				}
 				else
@@ -315,11 +320,11 @@ void tokenize(Tokenizer* tok, Array <Token>* out)
 
 			case '=':
 			{
-				eat_char(tok);
+				eat(tok);
 
-				if (peek_char(tok) == '=')
+				if (peek(tok) == '=')
 				{
-					eat_char(tok);
+					eat(tok);
 					emplace(out, TOKEN_DOUBLE_EQUALS, tok->line);	
 				}
 				else
@@ -330,22 +335,22 @@ void tokenize(Tokenizer* tok, Array <Token>* out)
 
 			case '&':
 			{
-				eat_char(tok);
+				eat(tok);
 
-				if (peek_char(tok) == '&')
+				if (peek(tok) == '&')
 				{
-					eat_char(tok);
+					eat(tok);
 					emplace(out, TOKEN_DOUBLE_AND, tok->line);	
 				}
 			} break;
 
 			case '|':
 			{
-				eat_char(tok);
+				eat(tok);
 
-				if (peek_char(tok) == '|')
+				if (peek(tok) == '|')
 				{
-					eat_char(tok);
+					eat(tok);
 					emplace(out, TOKEN_DOUBLE_PIPE, tok->line);	
 				}
 			} break;
@@ -353,31 +358,31 @@ void tokenize(Tokenizer* tok, Array <Token>* out)
 			case '{':
 			{
 				emplace(out, TOKEN_OPEN_BRACE, tok->line);
-				eat_char(tok);
+				eat(tok);
 			} break;
 
 			case '}':
 			{
 				emplace(out, TOKEN_CLOSE_BRACE, tok->line);
-				eat_char(tok);
+				eat(tok);
 			} break;
 
 			case '(':
 			{
 				emplace(out, TOKEN_OPEN_PAREN, tok->line);
-				eat_char(tok);
+				eat(tok);
 			} break;
 
 			case ')':
 			{
 				emplace(out, TOKEN_CLOSE_PAREN, tok->line);		
-				eat_char(tok);
+				eat(tok);
 			} break;
 
 			case ',':
 			{
 				emplace(out, TOKEN_COMMA, tok->line);		
-				eat_char(tok);
+				eat(tok);
 			} break;
 
 			case '\'':
@@ -387,12 +392,12 @@ void tokenize(Tokenizer* tok, Array <Token>* out)
 
 			default:
 			{
-				if (is_alpha(peek_char(tok)) || peek_char(tok) == '_')
+				if (is_alpha(peek(tok)) || peek(tok) == '_')
 				{
 					emplace(out, parse_identifier(tok));
 				}
-				// Allow the first character to be the decimal point (so numbers like .321 are allowed)
-				else if (is_number(peek_char(tok)) || peek_char(tok) == '.') 
+				// allow the first character to be the decimal point (so numbers like .321 are allowed)
+				else if (is_number(peek(tok)) || peek(tok) == '.') 
 				{
 					emplace(out, parse_number(tok));
 				}

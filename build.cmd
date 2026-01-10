@@ -4,7 +4,7 @@ setlocal EnableDelayedExpansion
 where /q clang.exe
 
 if %errorlevel%==1 (
-	echo Clang wasn't found. Install it, then ensure it is available in your PATH and try again.
+	echo Clang wasn't found, install it, then ensure it is available in your PATH and try again.
 	exit /b 1
 )
 
@@ -41,7 +41,7 @@ if "%win32%"=="true" (
 
 	if "%release%"=="true" ( set flags=!flags! -Oz ) else ( set flags=!flags! -g3 )
 
-	echo Building win32...
+	echo building win32...
 	clang src/main.cpp -o bin/index.exe !flags!
 
 	goto exit
@@ -52,16 +52,16 @@ if "%wasm%"=="true" (
 
 	if "%release%"=="true" ( set flags=!flags! -Oz ) else ( set flags=!flags! -g3 )
 
-	echo Building wasm...
+	echo building wasm...
 	clang src/main.cpp -o bin/index.wasm !flags!
 
 	goto exit
 )
 
 if "%1"=="" ( 
-	echo Usage: [%0] [targets...] [release]
+	echo usage: [%0] [targets...] [release]
 	echo.
-	echo Possible targets:
+	echo possible targets:
 	echo - wasm
 	echo - win32 
 )

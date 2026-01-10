@@ -34,6 +34,7 @@ inline Value make_value()
 }
 
 inline Value make_value(float v)
+
 {
 	Value value = {};
 
@@ -97,25 +98,10 @@ inline void as_string(const Value v, char* out, size_t n)
 {
 	switch (v.type) 
 	{
-		case VALUE_NUMBER:
-		{
-			__builtin_snprintf(out, n, "%f", v.number);
-		} break;
-
-		case VALUE_BOOLEAN:
-		{
-			__builtin_snprintf(out, n, "%s", v.boolean ? "true" : "false");
-		} break;
-
-		case VALUE_STRING:
-		{
-			__builtin_snprintf(out, n, "%s", v.string);
-		} break;
-
-		case VALUE_UNDEFINED:
-		{
-			__builtin_snprintf(out, n, "(undefined)");
-		} break;
+		case VALUE_NUMBER:    __builtin_snprintf(out, n, "%f", v.number); break;
+		case VALUE_BOOLEAN:   __builtin_snprintf(out, n, "%s", v.boolean ? "true" : "false"); break;
+		case VALUE_STRING:    __builtin_snprintf(out, n, "%s", v.string); break;
+		case VALUE_UNDEFINED: __builtin_snprintf(out, n, "(undefined)"); break;
 	}
 
 	ASSERT(true && "Invalid value type");

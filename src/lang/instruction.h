@@ -3,11 +3,13 @@
 #include <base/common.h>
 
 #define DEFINE_INSTRUCTIONS \
+	INST(CALL) \
+	INST(LOAD_NULL) \
 	INST(LOAD_IMMEDIATE) \
 	INST(LOAD_LOCAL) \
 	INST(STORE_LOCAL) \
-	INST(LOAD_PROC) \
-	INST(LOAD_NULL) \
+	INST(JUMP) \
+	INST(JUMP_COND) \
 	INST(ADD) \
 	INST(SUB) \
 	INST(DIV) \
@@ -21,11 +23,8 @@
 	INST(GREATER) \
 	INST(LESS) \
 	INST(NOT) \
-	INST(CALL) \
+	INST(NEGATE) \
 	INST(RETURN) \
-	INST(JUMP) \
-	INST(JUMP_COND) \
-	INST(NOOP) \
 	INST(HALT)
 
 #undef INST
@@ -53,4 +52,10 @@ inline const char* to_string(const InstructionType type)
 	}
 	
 	return "unknown";
+}
+
+// the DEFINE_INSTRUCTIONS macro above is sorted in that way so this check is very easily done
+inline bool needs_argument(const InstructionType type)
+{
+	return type >= INSTRUCTION_CALL && type <= INSTRUCTION_JUMP_COND;
 }

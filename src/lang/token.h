@@ -58,10 +58,10 @@ enum TokenType : uint8_t
 
 struct Token
 {
-	TokenType type; // Type of the token
-	uint16_t line;  // What line is it on, starts at 1
-	uint32_t start; // The starting index in the source file 
-	uint32_t end;   // The ending index of the token
+	TokenType type;
+	uint16_t line; 
+	uint32_t start;
+	uint32_t end;  
 };
 
 #undef TOKEN
@@ -87,9 +87,19 @@ inline bool is_binary_op(const TokenType type)
 	return type >= TOKEN_LESS && type <= TOKEN_STAR_EQUALS;
 }
 
-// The precedences mostly follow C's.
-// See: https://en.cppreference.com/w/c/language/operator_precedence.html
-// Goes from lowest from highest level of precedence
+inline bool is_assign_op(const TokenType type)
+{
+	return type == TOKEN_PLUS_EQUALS || 
+		type == TOKEN_DASH_EQUALS || 
+		type == TOKEN_SLASH_EQUALS || 
+		type == TOKEN_STAR_EQUALS || 
+		type == TOKEN_PERCENT_EQUALS || 
+		type == TOKEN_EQUALS;	
+}
+
+// the precedences mostly follow C's.
+// see: https://en.cppreference.com/w/c/language/operator_precedence.html
+// goes from lowest from highest level of precedence
 inline int8_t precedence_of(const TokenType type)
 {
 	switch (type)

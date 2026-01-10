@@ -2,26 +2,35 @@
 
 #include <base/array.h>
 
-#include <lang/tokenizer.h>
-
-#include <lang/generator.h>
+#include <lang/compiler.h>
 
 #include <lang/vm.h>
 
-static Tokenizer tok;
+static constexpr char source[] = 
+R"(
+define fact(n)
+{
+	if n <= 1
+	{
+		return 1
+	}
 
-static Generator gen;
+	return n * fact(n - 1)
+}
 
-static VM vm;
+var c = -1.
+//var b = -fact(5)
 
-inline void print_tokens(Array <Token> tokens)
+)";
+
+inline void print_tokens(const Tokenizer* tok, Array <Token> tokens)
 {
 	println("\nTokens:");
 
 	for (const Token& t : tokens)
 	{
-		char buf[128] = {};
-		as_string(t, tok.source, buf, 128);
+		Identifier buf = {};
+		as_string(t, tok->source, buf, 128);
 		
 		if (t.type >= TOKEN_STRING && t.type <= TOKEN_IDENTIFIER)
 		{
@@ -34,7 +43,7 @@ inline void print_tokens(Array <Token> tokens)
 	}
 }
 
-inline void print_instructions(Array <Instruction> instructions)
+inline void print_instructions(const Generator* gen, Array <Instruction> instructions)
 {
 	println("\nInstructions:");
 
@@ -42,37 +51,40 @@ inline void print_instructions(Array <Instruction> instructions)
 
 	for (const Instruction& it : instructions)
 	{
-		if (it.type == INSTRUCTION_LOAD_IMMEDIATE)
+		if (needs_argument(it.type))
 		{
-			char buf[128] = {};
-			as_string(gen.immediates[it.arg], buf, 128);
-
-			println("  %-4d | %-20s %d (%s)", idx, to_string(it.type), it.arg, buf);
-		}
-		else if (it.type == INSTRUCTION_LOAD_LOCAL || it.type == INSTRUCTION_STORE_LOCAL)
-		{
-			println("  %-4d | %-20s %d (%s)", idx, to_string(it.type), it.arg, gen.variables[it.arg]);
+			if (it.type == INSTRUCTION_LOAD_IMMEDIATE)
+			{
+				char buf[128] = {};
+				as_string(gen->immediates[it.arg], buf, 128);
+	
+				println("  %-4d | %-20s %d (%s)", idx, to_string(it.type), it.arg, buf);
+			}
+			else
+			{
+				println("  %-4d | %-20s %d", idx, to_string(it.type), it.arg);
+			}
 		}
 		else
 		{
-			println("  %-4d | %-20s %d", idx, to_string(it.type), it.arg);
+			println("  %-4d | %-20s", idx, to_string(it.type));
 		}
 
 		idx++;
 	}
 }
 
-inline void dump_state() 
+inline void dump_state(const VM* vm) 
 {
 	println("  -----------");
 	println("  Stack dump:");
 	
-	if (vm.stack.count > 0)
+	if (vm->stack.count > 0)
 	{
-		for (uint16_t i = 0; i < vm.stack.count; i++)
+		for (uint16_t i = 0; i < vm->stack.count; i++)
 		{
 			char buf[128] = {};
-			as_string(vm.stack[i], buf, 128);
+			as_string(vm->stack[i], buf, 128);
 
 			println("    [%d] %s", i, buf);
 		}
@@ -85,19 +97,19 @@ inline void dump_state()
 	println("");
 }
 
-inline void execute_program()
+inline void execute_program(VM* vm)
 {
 	println("\nExecution:");
 
 	while (true)
-	{
-		const Instruction i = vm.instructions[vm.ic]; 
-	
-		println("  -> %-4d | %-20s %d", vm.ic, to_string(i.type), i.arg);
-		
-		Trap r = execute(&vm);
+	{	
+		Instruction it = vm->instructions[vm->ip];
 
-		dump_state();
+		println("  -> %-4d | %-20s %d", vm->ip, to_string(it.type), it.arg);
+		
+		Trap r = execute(vm);
+
+		dump_state(vm);
 
 		if (r == TRAP_HALT_EXECUTION)
 		{
@@ -123,48 +135,31 @@ inline void execute_program()
 	}
 }
 
-static uint8_t arena_memory[128 * 1024];
-static Arena arena;
+static uint8_t arena_memory[2 * 1024 * 1024] = {};
 
-static constexpr char source[] = 
-R"(
-define fact(n)
+void entry()
 {
-	if n <= 1
-	{
-		return 1
-	}
+	Arena arena = make_arena(arena_memory, sizeof(arena_memory));
+	
+	Compiler com = {};
+	init(&com, &arena, source);
 
-	return n * fact(n - 1)
-}
+	print_tokens(&com.tok, com.tokens);
+	print_instructions(&com.gen, com.instructions);
 
-var f = fact(5)
-)";
+	Array <uint8_t> blob = make_array<uint8_t>(&arena, MAX_BLOB_SIZE);
+	compile_program(&com, &blob);
 
-extern "C" void mainCRTStartup()
-{
-	arena = make_arena(arena_memory, sizeof(arena_memory));
+	VM vm = {};
+	init(&vm, &arena, blob.elements, blob.count);
 
-	init(&tok, source);
-
-	Array <Token> tokens = make_array<Token>(&arena, 1024);
-	tokenize(&tok, &tokens);
-	print_tokens(tokens);
-
-	init(&gen, &arena, source, tokens);
-
-	Array <Instruction> instructions = make_array<Instruction>(&arena, 1024);
-	emit_program(&gen, &instructions);
-	print_instructions(instructions);
-
-	init(&vm, &arena, instructions, gen.immediates);
-	execute_program();
-
-	exit(0);
+	execute_program(&vm);
 }
 
 #include <lang/tokenizer.cpp>
 
 #include <lang/generator.cpp>
+
+#include <lang/compiler.cpp>
 
 #include <lang/vm.cpp>

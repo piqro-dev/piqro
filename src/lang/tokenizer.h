@@ -9,10 +9,11 @@
 struct Tokenizer
 {
 	const char* source;
+
 	uint16_t line;
-	uint32_t ptr;
+	uint16_t ptr;
 };
 
-static inline void init(Tokenizer* tok, const char* source);
+void init(Tokenizer* tok, const char* source);
 
-static inline void tokenize(Tokenizer* tok, Array <Token>* out);
+void tokenize(Tokenizer* tok, Array <Token>* out);
