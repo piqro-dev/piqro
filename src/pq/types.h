@@ -1,0 +1,327 @@
+#pragma once
+
+#include <base/common.h>
+
+#include <base/string.h>
+
+#include <base/arena.h>
+
+//
+// value
+//
+
+typedef enum : uint8_t
+{
+	VALUE_UNDEFINED,
+	VALUE_NUMBER,
+	VALUE_BOOLEAN,
+	VALUE_STRING,
+} PQ_ValueType;
+
+typedef struct 
+{
+	PQ_ValueType type;
+
+	union
+	{
+		float n;
+		bool b; 
+		String s;
+	};
+} PQ_Value;
+
+#define pq_value_undefined()   ((PQ_Value){ VALUE_UNDEFINED })
+
+#define pq_value_number(v)     ((PQ_Value){ VALUE_NUMBER, .n = (float)(v) })
+
+#define pq_value_boolean(v)    ((PQ_Value){ VALUE_BOOLEAN, .b = (bool)(v) })
+
+#define pq_value_string(v)     ((PQ_Value){ VALUE_STRING, .s = v })
+
+static inline float pq_value_as_number(const PQ_Value v)
+{
+	switch (v.type) 
+	{
+		case VALUE_UNDEFINED: return 0.0f;
+		case VALUE_NUMBER:    return v.n;
+		case VALUE_BOOLEAN:   return (float)v.b;
+
+		default: return 0.0f;
+	}
+}
+
+static inline bool pq_value_as_boolean(const PQ_Value v)
+{
+	switch (v.type) 
+	{
+		case VALUE_UNDEFINED: return (bool)v.n;
+		case VALUE_NUMBER:    return false;
+		case VALUE_BOOLEAN:   return v.b;
+
+		default: return false;
+	}
+}
+
+static inline String pq_value_as_string(Arena* arena, const PQ_Value v)
+{
+	switch (v.type) 
+	{
+		case VALUE_NUMBER:    return str_format(arena, "%f", v.n);
+		case VALUE_BOOLEAN:   return str_format(arena, "%s", v.b ? "true" : "false");
+		case VALUE_STRING:    return str_copy_from_to(arena, v.s, 1, v.s.length - 1);
+		case VALUE_UNDEFINED: return str_copy_c_str(arena, "(undefined)");
+
+		default: return (String){};
+	}
+}
+
+#define DEFINE_VALUE_OPERATIONS \
+	OP(add, number, number, +) \
+	OP(sub, number, number, -) \
+	OP(div, number, number, /) \
+	OP(mul, number, number, *) \
+	\
+	OP(and,     boolean, number, &&) \
+	OP(or,      boolean, number, ||) \
+	OP(greater, boolean, number, >) \
+	OP(less,    boolean, number, <) \
+	OP(gt,      boolean, number, >=) \
+	OP(lt,      boolean, number, <=)
+
+#define OP(name, ret_type, type, op) \
+	static inline PQ_Value pq_value_##name(PQ_Value l, PQ_Value r) { return pq_value_##ret_type(pq_value_as_##type(l) op pq_value_as_##type(r)); }
+
+DEFINE_VALUE_OPERATIONS
+
+static inline PQ_Value pq_value_mod(PQ_Value l, PQ_Value r)
+{
+	return pq_value_number(__builtin_fmodf(pq_value_as_number(l), pq_value_as_number(r)));
+}
+
+static inline PQ_Value pq_value_equals(PQ_Value l, PQ_Value r)
+{
+	if (l.type == VALUE_STRING && r.type == VALUE_STRING)
+	{
+		return pq_value_boolean(str_equals(l.s, r.s));
+	}
+	else
+	{
+		return pq_value_boolean(pq_value_as_number(l) == pq_value_as_number(r));
+	}
+}
+
+static inline PQ_Value pq_value_not(PQ_Value l)
+{
+	return pq_value_boolean(!pq_value_as_boolean(l));
+}
+
+#undef OP
+#undef DEFINE_VALUE_OPERATIONS
+
+//
+// instructions
+//
+
+#define DEFINE_INSTRUCTIONS \
+	INST(CALL) \
+	INST(LOAD_NULL) \
+	INST(LOAD_IMMEDIATE) \
+	INST(LOAD_LOCAL) \
+	INST(STORE_LOCAL) \
+	INST(JUMP) \
+	INST(JUMP_COND) \
+	INST(ADD) \
+	INST(SUB) \
+	INST(DIV) \
+	INST(MUL) \
+	INST(MOD) \
+	INST(AND) \
+	INST(OR) \
+	INST(GREATER_THAN) \
+	INST(LESS_THAN) \
+	INST(EQUALS) \
+	INST(GREATER) \
+	INST(LESS) \
+	INST(NOT) \
+	INST(NEGATE) \
+	INST(RETURN) \
+	INST(HALT)
+
+#define INST(name) INST_##name,
+
+typedef enum : uint8_t
+{
+	DEFINE_INSTRUCTIONS
+} PQ_InstructionType;
+
+typedef struct
+{
+	PQ_InstructionType type;
+	uint16_t arg;
+} PQ_Instruction;
+
+#undef INST
+#define INST(name) case INST_##name: return #name;
+
+static inline const char* pq_inst_to_c_str(const PQ_InstructionType type)
+{
+	switch (type)
+	{
+		DEFINE_INSTRUCTIONS
+	}
+	
+	return "unknown";
+}
+
+#undef INST
+#undef DEFINE_INSTRUCTIONS
+
+// the DEFINE_INSTRUCTIONS macro above is sorted in that way so this check is very easily done
+static inline bool pq_inst_needs_arg(const PQ_InstructionType type)
+{
+	return type >= INST_CALL && type <= INST_JUMP_COND;
+}
+
+//
+// tokens
+//
+
+#define DEFINE_TOKENS \
+	TOKEN(UNKNOWN,        "unknown") \
+	\
+	TOKEN(STRING,         "string literal") \
+	TOKEN(NUMBER,         "number literal") \
+	TOKEN(IDENTIFIER,     "identifier") \
+	TOKEN(TRUE,           "`true`") \
+	TOKEN(FALSE,          "`false`") \
+	\
+	TOKEN(VAR,            "keyword `var`") \
+	TOKEN(FOREVER,        "keyword `forever`") \
+	TOKEN(REPEAT,         "keyword `repeat`") \
+	TOKEN(UNTIL,          "keyword `until`") \
+	TOKEN(DEFINE,         "keyword `define`") \
+	TOKEN(RETURN,         "keyword `return`") \
+	TOKEN(IF,             "keyword `if`") \
+	TOKEN(ELSE,           "keyword `else`") \
+	TOKEN(BREAK,          "keyword `break`") \
+	TOKEN(FOREIGN,        "keyword `foreign`") \
+	\
+	TOKEN(LESS,           "`<`") \
+	TOKEN(GREATER,        "`>`") \
+	TOKEN(LESS_THAN,      "`<=`") \
+	TOKEN(GREATER_THAN,   "`>=`") \
+	TOKEN(EQUALS,         "`=`") \
+	TOKEN(DOUBLE_EQUALS,  "`==`") \
+	TOKEN(EXCLAMATION,    "`!`") \
+	TOKEN(NOT_EQUALS,     "`!=`") \
+	TOKEN(DOUBLE_AND,     "`&&`") \
+	TOKEN(DOUBLE_PIPE,    "`||`") \
+	TOKEN(PERCENT,        "`%`") \
+	TOKEN(PERCENT_EQUALS, "`%=`") \
+	TOKEN(PLUS,           "`+`") \
+	TOKEN(PLUS_EQUALS,    "`+=`") \
+	TOKEN(DASH,           "`-`") \
+	TOKEN(DASH_EQUALS,    "`-=`") \
+	TOKEN(SLASH,          "`/`") \
+	TOKEN(SLASH_EQUALS,   "`/=`") \
+	TOKEN(STAR,           "`*`") \
+	TOKEN(STAR_EQUALS,    "`*=`") \
+	\
+	TOKEN(OPEN_BRACE,     "`{`") \
+	TOKEN(CLOSE_BRACE,    "`}`") \
+	TOKEN(OPEN_PAREN,     "`(`") \
+	TOKEN(CLOSE_PAREN,    "`)`") \
+	TOKEN(COMMA,          "`,`")
+
+#define TOKEN(name, fancy_name) TOKEN_##name,
+
+typedef enum : uint8_t
+{
+	DEFINE_TOKENS
+} PQ_TokenType;
+
+typedef struct
+{
+	PQ_TokenType type;
+
+	uint16_t line; 
+	uint32_t start;
+	uint32_t end;  
+} PQ_Token;
+
+#undef TOKEN
+#define TOKEN(name, fancy_name) case TOKEN_##name: return fancy_name;
+
+static inline const char* pq_token_to_c_str(const PQ_TokenType type)
+{
+	switch (type)
+	{
+		DEFINE_TOKENS
+	}
+	
+	return "unknown";
+}
+
+#undef TOKEN
+#undef DEFINE_TOKENS
+
+static inline String pq_token_as_string(Arena* arena, const PQ_Token t, String source)
+{
+	return str_copy_from_to(arena, source, t.start, t.end);
+}
+
+static inline bool pq_token_is_binary_op(const PQ_TokenType type)
+{
+	return type >= TOKEN_LESS && type <= TOKEN_STAR_EQUALS;
+}
+
+static inline bool pq_token_is_assign_op(const PQ_TokenType type)
+{	
+	return type == TOKEN_PLUS_EQUALS || 
+		type == TOKEN_DASH_EQUALS || 
+		type == TOKEN_SLASH_EQUALS || 
+		type == TOKEN_STAR_EQUALS || 
+		type == TOKEN_PERCENT_EQUALS || 
+		type == TOKEN_EQUALS;	
+}
+
+// the precedences mostly follow C's.
+// see: https://en.cppreference.com/w/c/language/operator_precedence.html
+// goes from lowest from highest level of precedence
+static inline int8_t pq_token_precedence_of(const PQ_TokenType type)
+{
+	switch (type)
+	{
+		case TOKEN_DOUBLE_AND: return 0;
+		case TOKEN_DOUBLE_PIPE: return 1;
+
+		case TOKEN_NOT_EQUALS:
+		case TOKEN_DOUBLE_EQUALS: return 2;  
+
+		case TOKEN_LESS:
+		case TOKEN_GREATER:
+		case TOKEN_LESS_THAN:
+		case TOKEN_GREATER_THAN: return 3;
+
+		case TOKEN_PLUS:
+		case TOKEN_DASH: return 4;
+
+		case TOKEN_PERCENT:
+		case TOKEN_SLASH:
+		case TOKEN_STAR: return 5;
+
+		default: {}
+	}
+
+	return -1;
+}
+
+//
+// compiled blob
+//
+
+typedef struct 
+{
+	uint8_t* buffer;
+	uint16_t size;
+} PQ_CompiledBlob;

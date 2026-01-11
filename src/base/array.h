@@ -4,107 +4,50 @@
 
 #include <base/arena.h>
 
-template <typename T>
-struct Array
-{
-	T* elements;
+#define Array(T) \
+	struct \
+	{ \
+		T* elements; \
+		\
+		size_t count; \
+		size_t capacity; \
+	}
 
-	size_t count;
-	size_t capacity;
+#define array_make(arena, T, N) \
+	({ \
+		Array (T) array = {}; \
+		\
+		array.capacity = (N); \
+		array.count = 0; \
+		array.elements = arena_push_array((arena), T, array.capacity); \
+		\
+		array; \
+	})
 
-	inline const T& operator[](size_t idx) const { return elements[idx]; }
-	inline T& operator[](size_t idx)             { return elements[idx]; }
-};
+#define array_push(array, v) \
+	({ \
+		ASSERT((array)->count < (array)->capacity); \
+		&(array)->elements[(array)->count++] = (v); \
+	})
 
-template <typename T>
-inline Array <T> make_array(Arena* arena, size_t capacity)
-{
-	Array <T> array = {};
+#define array_emplace(array, ...) \
+	({ \
+		ASSERT((array)->count < (array)->capacity); \
+		&((array)->elements[(array)->count++] = (typeof((array)->elements[0])){ __VA_ARGS__ }); \
+	})
 
-	array.capacity = capacity;
-	array.elements = push<T>(arena, array.capacity);
-	array.count = 0;
+#define array_pop(array) \
+	({ \
+		ASSERT((array)->count > 0); \
+		&(array)->elements[--(array)->count]; \
+	})
 
-	return array;
-}
+#define array_peek(array) \
+	({ \
+		&(array)->elements[(array)->count - 1]; \
+	})
 
-template <typename T>
-inline T* push(Array <T>* array, T v)
-{
-	ASSERT(array->count < array->capacity);
-
-	return &(array->elements[array->count++] = v);
-}
-
-template <typename T>
-inline T* push(Array <T>* array)
-{
-	ASSERT(array->count < array->capacity);
-
-	return &array->elements[array->count++];
-}
-
-template <typename T, typename ... Args>
-inline T* emplace(Array <T>* array, Args ... args)
-{
-	ASSERT(array->count < array->capacity);
-
-	return &(array->elements[array->count++] = T{ args... });
-}
-
-template <typename T>
-inline T* pop(Array <T>* array)
-{
-	return &array->elements[--array->count];
-}
-
-template <typename T>
-inline void trim_end(Array <T>* array, size_t from)
-{
-	array->count = from;
-}
-
-template <typename T>
-inline T* remove(Array <T>* array, size_t at)
-{
-	return &array->elements[at] = *pop(array);
-}
-
-template <typename T>
-inline T* peek(Array <T>* array) 
-{
-	return &(*array)[array->count - 1];
-}
-
-template <typename T>
-inline void reset(Array <T>* array) 
-{
-	array->count = 0;
-}
-
-// used only for iteration
-// both begin() and end() need references to the type...
-
-template <typename T>
-inline T* begin(Array <T>& array)
-{
-	return array.elements;	
-}
-
-template <typename T>
-inline T* end(Array <T>& array)
-{
-	return array.elements + array.count;
-}	
-
-template <typename T>
-inline T* begin(const Array <T>& array)
-{
-	return array.elements;	
-}
-
-template <typename T>
-inline T* end(const Array <T>& array)
-{
-	return array.elements + array.count;
-}	
+#define array_trim_end(array, from) \
+	({ \
+		(array)->count = from; \
+	})

@@ -10,7 +10,7 @@ if %errorlevel%==1 (
 
 for %%a in (%*) do set "%%a=true"
 
-set common_flags=-std=gnu++2c ^
+set common_flags=-std=gnu2y ^
 	-Isrc ^
 	-ffast-math ^
 	-ferror-limit=1000 ^
@@ -21,15 +21,10 @@ set common_flags=-std=gnu++2c ^
 	-Wno-tautological-compare ^
 	-nostdlib
 
-set wasm_flags=%common_flags% ^
-	--target=wasm32 ^
-	-Xlinker --export-all ^
-	-Xlinker --no-entry ^
-	-Xlinker --allow-undefined
-
 set cli_flags=%common_flags% ^
 	-Xlinker -subsystem:console ^
-	-fuse-ld=lld
+	-fuse-ld=lld ^
+	-D_CRT_SECURE_NO_WARNINGS
 
 set cli_libs= ^
 	-lmsvcrt ^
@@ -37,24 +32,30 @@ set cli_libs= ^
 	-lvcruntime ^
 	-lkernel32
 
+set web_flags=%common_flags% ^
+	--target=wasm32 ^
+	-Xlinker --export-all ^
+	-Xlinker --no-entry ^
+	-Xlinker --allow-undefined
+
 if "%cli%"=="true" (
 	set flags=%cli_flags% %cli_libs%
 
 	if "%release%"=="true" ( set flags=!flags! -Oz ) else ( set flags=!flags! -g3 )
 
 	echo building cli...
-	clang src/cli/main.cpp -o bin/index.exe !flags!
+	clang src/cli/main.c -o bin/cli.exe !flags!
 
 	goto exit
 )
 
-if "%wasm%"=="true" (
-	set flags=%wasm_flags%
+if "%web%"=="true" (
+	set flags=%web_flags%
 
 	if "%release%"=="true" ( set flags=!flags! -Oz ) else ( set flags=!flags! -g3 )
 
-	echo building wasm...
-	clang src/wasm/main.cpp -o bin/index.wasm !flags!
+	echo building web...
+	clang src/web/main.c -o bin/index.wasm !flags!
 
 	goto exit
 )
@@ -64,7 +65,7 @@ if "%1"=="" (
 	echo.
 	echo possible targets:
 	echo - cli
-	echo - wasm
+	echo - web
 )
 
 :exit

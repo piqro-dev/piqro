@@ -2,6 +2,6 @@
 
 if %errorlevel%==0 (
 	pushd bin
-		index.exe
+		cli.exe
 	popd
 )

@@ -4,26 +4,37 @@
 // system includes
 //
 
+#include <stdarg.h>
+
 #if !defined __wasm__
 	#include <stdlib.h>
 	#include <stdio.h>
 #endif
 
 //
-// includes
+// third party includes
 //
 
-#include <base/log.h>
+#if defined __wasm__
+	#define STB_SPRINTF_IMPLEMENTATION
+	#define STB_SPRINTF_DECORATE(name) name
+
+	#include <third_party/stb_sprintf.h>
+#endif
 
 //
 // macros
 //
 
-#define ASSERT(expr) do { if (!(expr)) { errorln("Assertion failed: %s, in file %s, on line %d", #expr, __FILE__, __LINE__); __builtin_trap(); } } while (0) 
+#define ASSERT(expr) do { if (!(expr)) { printf("Assertion failed: %s, in file %s, on line %d", #expr, __FILE__, __LINE__); __debugbreak(); } } while (0) 
 
 #define DO_ONCE for (static bool once = false; !once; once = true)
 
 #define COUNT_OF(array) (sizeof(array) / sizeof(array[0]))
+
+#define MIN(a, b) (__builtin_elementwise_min((a), (b)))
+
+#define MAX(a, b) (__builtin_elementwise_max((a), (b)))
 
 //
 // types

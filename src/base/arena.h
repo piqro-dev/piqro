@@ -2,46 +2,51 @@
 
 #include <base/common.h>
 
-struct Arena
+typedef struct
 {
-	uint8_t* buffer = nullptr;
-	uint8_t* offset = nullptr;
+	uint8_t* buffer;
+	size_t offset;
+	size_t capacity;
+} Arena;
 
-	size_t capacity = 0;
-};
-
-inline Arena make_arena(uint8_t* buffer, size_t capacity) 
+static inline Arena arena_make(uint8_t* buffer, size_t capacity)
 {
 	Arena arena = {};
 
 	arena.buffer = buffer;
-	arena.offset = arena.buffer;
+	arena.offset = 0;
 	arena.capacity = capacity;
 
 	return arena;
 }
 
-template <typename T>
-inline T* push(Arena* arena, size_t count = 1)
+static inline void* _arena_push(Arena* arena, size_t size, size_t align)
 {
-	ASSERT(arena->offset < arena->buffer + arena->capacity && "Out of memory");
+	size_t offset = __builtin_align_up(arena->offset, align);
+	
+	if (offset + size > arena->capacity)
+	{
+		return nullptr;
+	}
 
-	T* ptr = (T*)__builtin_align_up(arena->offset, alignof(T));
-	arena->offset = (uint8_t*)ptr + sizeof(T) * count;
+	arena->offset = offset + size;
+
+	uint8_t* ptr = arena->buffer + offset;
+	__builtin_memset(ptr, 0, size);
 
 	return ptr;
 }
 
-template <typename T, typename ... Args>
-inline T* emplace(Arena* arena, const Args& ... args)
+static inline void arena_pop(Arena* arena, size_t size)
 {
-	T* ptr = push<T>(arena);
-	*ptr = T{ args... };
-
-	return ptr;
+	arena->offset -= size;
 }
 
-inline void reset(Arena* arena)
+static inline void arena_reset(Arena* arena)
 {
-	arena->offset = arena->buffer;
+	arena->offset = 0;
 }
+
+#define arena_push(arena, T) ((T*)_arena_push((arena), sizeof(T), alignof(T)))
+
+#define arena_push_array(arena, T, N) ((T*)_arena_push((arena), sizeof(T) * (N), alignof(T)))
