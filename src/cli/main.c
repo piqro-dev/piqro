@@ -4,49 +4,32 @@
 
 #include <pq/vm.h>
 
-void compiler_error_fn(uint16_t line, const char* fmt, ...)
+void compiler_error_fn(uint16_t line, const char* what)
 {
-	va_list args;
-	
-	char out[2048];
-	
-	va_start(args, fmt);
-
-	int len = sprintf(out, "Compilation error: line %d: ", line);
-	len += vsprintf(out + len, fmt, args);
-
-	va_end(args);
-
-	errorln("%s", out);
-
+	errorln("Compilation error: line %d: %s", line, what);
 	exit(1);
 }
 
-void vm_error_fn(const char* fmt, ...)
+void vm_error_fn(const char* what)
 {
-	va_list args;
-	
-	char out[2048];
-	
-	va_start(args, fmt);
-
-	int len = sprintf(out, "Runtime error: ");
-	len += vsprintf(out + len, fmt, args);
-
-	va_end(args);
-
-	errorln("%s", out);
-
+	errorln("Runtime error: %s", what);
 	exit(1);
 }
 
 void print_proc(PQ_VM* vm)
 {
-	String v = pq_value_as_string(vm->arena, pq_vm_get_local(vm, 0));
+	String v = pq_value_as_string(vm->arena, pq_get_local(vm, 0));
 
 	println("%.*s", s_fmt(v));
 
-	pq_vm_push(vm, pq_value_undefined());
+	pq_return(vm);
+}
+
+void sin_proc(PQ_VM* vm)
+{
+	float v = pq_value_as_number(pq_get_local(vm, 0));
+
+	pq_return_value(vm, pq_value_number(__builtin_sinf(v)));
 }
 
 void dump_stack(PQ_VM* vm)
@@ -68,67 +51,91 @@ void dump_stack(PQ_VM* vm)
 	}
 }
 
-static uint8_t mem[4 * 1024 * 1024];
-
-int main()
+void dump_all_instructions(PQ_Compiler* c, PQ_VM* vm)
 {
-	Arena arena = arena_make(mem, sizeof(mem));
-
-	String source = s("f define print(x) var i = 0 repeat until i == 10 { print(i) i += 1 }");
-	
-	PQ_Compiler c = {};
-	pq_compiler_init(&c, &arena, source, compiler_error_fn);
-
-	PQ_CompiledBlob b = pq_compile(&c);
-
-	PQ_VM vm = {};
-	pq_vm_init(&vm, &arena, &b, vm_error_fn);
-	
-	for (uint16_t i = 0; i < vm.instruction_count; i++)
+	for (uint16_t i = 0; i < vm->instruction_count; i++)
 	{
-		PQ_Instruction it = vm.instructions[i];
+		PQ_Instruction it = vm->instructions[i];
 
 		if (pq_inst_needs_arg(it.type))
 		{
-			println("  %-4d | %-20s %d", i, pq_inst_to_c_str(it.type), it.arg);
+			if (it.type == INST_CALL)
+			{
+				println("  %-4d | %-20s %d (%.*s)", i, pq_inst_to_c_str(it.type), it.arg, s_fmt(c->procedures[it.arg].name));
+			}
+			else
+			{
+				println("  %-4d | %-20s %d", i, pq_inst_to_c_str(it.type), it.arg);
+			}
 		}
 		else
 		{
 			println("  %-4d | %-20s", i, pq_inst_to_c_str(it.type));
 		}
 	}
+}
 
-	pq_vm_bind_procedure(&vm, 0, print_proc);
+void dump_instruction(PQ_Compiler* c, PQ_VM* vm)
+{
+	PQ_Instruction it = vm->instructions[vm->ip];
 
-	println("");
-
-	while (true)
+	if (pq_inst_needs_arg(it.type))
 	{
-		PQ_Instruction it = vm.instructions[vm.ip];
+		if (it.type == INST_CALL)
+		{
+			println("\n-> %d | %-20s %d (%.*s)", vm->ip, pq_inst_to_c_str(it.type), it.arg, s_fmt(c->procedures[it.arg].name));
+		}
+		else
+		{
+			println("\n-> %d | %-20s %d", vm->ip, pq_inst_to_c_str(it.type), it.arg);
+		}
+	}
+	else
+	{
+		println("\n-> %d | %-20s", vm->ip, pq_inst_to_c_str(it.type));
+	}
+}
 
-		//if (pq_inst_needs_arg(it.type))
-		//{
-		//	printf("-> %-3d | %-20s %d", vm.ip, pq_inst_to_c_str(it.type), it.arg);
-		//}
-		//else
-		//{
-		//	printf("-> %-3d | %-20s", vm.ip, pq_inst_to_c_str(it.type));
-		//}
+static constexpr const char source[] = 
+{
+	#embed "test_bed.pq" 
+	,'\0'
+};
 
-		PQ_Trap r = pq_vm_execute(&vm); 
+static uint8_t mem[4 * 1024 * 1024];
+
+int main()
+{
+	Arena arena = arena_make(mem, sizeof(mem));
+	
+	PQ_Compiler c = {};
+
+	{
+		pq_init_compiler(&c, &arena, s(source), compiler_error_fn);
+	
+		pq_declare_foreign_proc(&c, s("print"), 1);
+		pq_declare_foreign_proc(&c, s("sin"), 1);
+	}
+
+	PQ_CompiledBlob b = pq_compile(&c);
+
+	PQ_VM vm = {};
+	pq_init_vm(&vm, &arena, &b, vm_error_fn);
+	
+	//dump_all_instructions(&c, &vm);
+
+	pq_bind_foreign_proc(&vm, s("print"), print_proc);
+	pq_bind_foreign_proc(&vm, s("sin"), sin_proc);
+
+	bool r = true;
+
+	while (r)
+	{
+		//dump_instruction(&c, &vm);
+
+		r = pq_execute(&vm); 
 
 		//dump_stack(&vm);
-
-		if (r == TRAP_HALT_EXECUTION)
-		{
-			break;
-		}
-
-		if (r != TRAP_SUCCESS)
-		{
-			vm_error_fn("%s", pq_trap_to_c_str(r));
-			break;
-		}
 	}
 }
 

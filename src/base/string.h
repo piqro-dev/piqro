@@ -11,9 +11,9 @@ struct String
 	size_t length;
 };
 
-#define s(s) ((String){ s, sizeof(s) - 1 })
+#define s(s) ((String){ (s), sizeof(s) - 1 })
 
-#define s_fmt(s) (int)s.length, s.buffer
+#define s_fmt(s) (int)(s).length, (s).buffer
 
 static inline String str_copy_c_str(Arena* arena, const char* c_str)
 {

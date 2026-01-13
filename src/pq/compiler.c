@@ -1,12 +1,20 @@
 #include <pq/compiler.h>
 
+#define C_ERROR(...) \
+	do \
+	{ \
+		char what[2048]; \
+		sprintf(what, __VA_ARGS__); \
+		c->error(c->line, what); \
+	} while (0);
+
 //
 // tokenization
 //
 
 static char peek_char(PQ_Compiler* c, int16_t offset)
 {
-	if (c->idx + offset > c->source.length) 
+	if (c->idx + offset >= c->source.length) 
 	{ 
 		return 0; 
 	} 
@@ -32,6 +40,7 @@ static constexpr struct
 	String name;
 } KEYWORDS[] =
 {
+	{ TOKEN_NULL,    s("null") },
 	{ TOKEN_TRUE,    s("true") },
 	{ TOKEN_FALSE,   s("false") },
 	{ TOKEN_VAR,     s("var") },
@@ -102,7 +111,7 @@ static PQ_Token parse_number(PQ_Compiler* c)
 		// bail out early if the next character isn't a number
 		if (!is_number(peek_char(c, 1))) 
 		{
-			c->error(c->line, "Unexpected %c", peek_char(c, 0));
+			C_ERROR("Unexpected %c", peek_char(c, 0));
 		}
 
 		eat_char(c);
@@ -119,7 +128,7 @@ static PQ_Token parse_number(PQ_Compiler* c)
 			}
 			else
 			{
-				c->error(c->line, "Unexpected `.` in number literal");
+				C_ERROR("Unexpected `.` in number literal");
 			}
 		} 
 
@@ -145,7 +154,7 @@ static PQ_Token parse_string(PQ_Compiler* c)
 	{
 		if (!peek_char(c, 0))
 		{
-			c->error(c->line, "Expected `'` to close string literal");
+			C_ERROR("Expected `'` to close string literal");
 		}
 	}
 
@@ -259,7 +268,7 @@ static void tokenize(PQ_Compiler* c)
 
 				if (peek_char(c, 0) == '/')
 				{
-					while (peek_char(c, 0) != '\n')
+					while (peek_char(c, 0) != '\n' && peek_char(c, 0))
 					{
 						eat_char(c);
 					}
@@ -390,7 +399,7 @@ static void tokenize(PQ_Compiler* c)
 				}
 				else
 				{
-					c->error(c->line, "Encountered bad token");
+					C_ERROR("Encountered bad token");
 				}
 			} break;
 		}
@@ -424,7 +433,7 @@ static PQ_Token try_eat_token(PQ_Compiler* c, PQ_TokenType expected)
 
 	if (next != expected)
 	{
-		c->error(c->line, "Expected %s, got %s", pq_token_to_c_str(expected), pq_token_to_c_str(next));
+		C_ERROR("Expected %s, got %s", pq_token_to_c_str(expected), pq_token_to_c_str(next));
 	}
 
 	return eat_token(c);
@@ -441,7 +450,7 @@ static bool variable_exists(PQ_Compiler* c, String name)
 {
 	for (uint16_t i = 0; i < c->variable_count; i++)
 	{
-		if (str_equals(c->variables[i], name))
+		if (str_equals(c->variables[i].name, name))
 		{
 			return true;
 		}
@@ -481,19 +490,29 @@ static PQ_Procedure* get_or_create_procedure(PQ_Compiler* c, String name)
 	return proc;
 }
 
-static uint16_t get_or_create_variable(PQ_Compiler* c, String name)
+static PQ_Variable* get_or_create_variable(PQ_Compiler* c, String name)
 {
 	for (uint16_t i = 0; i < c->variable_count; i++)
 	{
-		if (str_equals(c->variables[i], name))
+		if (str_equals(c->variables[i].name, name))
 		{
-			return i;
+			return &c->variables[i];
 		}
 	}
 
-	c->variables[c->variable_count++] = str_copy(c->arena, name); 
+	PQ_Variable* var = &c->variables[c->variable_count++];
 
-	return c->variable_count - 1;
+	var->name = str_copy(c->arena, name); 
+	var->idx = c->variable_count - 1;
+
+	// if this isn't nullptr, this variable is an argument
+	if (c->current_proc)
+	{
+		var->proc = c->current_proc;
+		var->idx = var->proc->arg_count;
+	}
+
+	return var;
 }
 
 static uint16_t get_or_create_immediate(PQ_Compiler* c, PQ_Value v)
@@ -519,6 +538,13 @@ static void emit_statement(PQ_Compiler* c);
 // expressions
 //
 
+static void emit_null_expression(PQ_Compiler* c)
+{
+	PQ_Token null = eat_token(c);
+
+	push_inst(c, (PQ_Instruction){ INST_LOAD_NULL });
+}
+
 static void emit_number_expression(PQ_Compiler* c)
 {
 	PQ_Token number = eat_token(c);
@@ -536,10 +562,10 @@ static void emit_identifier_expression(PQ_Compiler* c)
 
 	if (!variable_exists(c, name))
 	{
-		c->error(c->line, "Undefined identifier '%.*s'", s_fmt(name));
+		C_ERROR("Undefined identifier '%.*s'", s_fmt(name));
 	}
 
-	push_inst(c, (PQ_Instruction){ INST_LOAD_LOCAL, get_or_create_variable(c, name) });
+	push_inst(c, (PQ_Instruction){ INST_LOAD_LOCAL, get_or_create_variable(c, name)->idx });
 }
 
 static void emit_boolean_expression(PQ_Compiler* c)
@@ -568,7 +594,7 @@ static void emit_procedure_expression(PQ_Compiler* c)
 
 	if (!procedure_exists(c, name))
 	{
-		c->error(c->line, "Undefined procedure '%.*s'", s_fmt(name));
+		C_ERROR("Undefined procedure '%.*s'", s_fmt(name));
 	}
 
 	// (
@@ -582,7 +608,7 @@ static void emit_procedure_expression(PQ_Compiler* c)
 		// check for (,<expr>
 		if (peek_token(c, -1).type == TOKEN_OPEN_PAREN && peek_token(c, 0).type == TOKEN_COMMA)
 		{
-			c->error(c->line, "Expected expression after `(` in procedure call, got `,`");
+			C_ERROR("Expected expression after `(` in procedure call, got `,`");
 		}
 
 		// <expr>
@@ -598,7 +624,7 @@ static void emit_procedure_expression(PQ_Compiler* c)
 			// check for <expr>,)
 			if (peek_token(c, 0).type == TOKEN_CLOSE_PAREN)
 			{
-				c->error(c->line, "Expected expression after `,` in procedure call, got `)`");
+				C_ERROR("Expected expression after `,` in procedure call, got `)`");
 			}
 		}
 	}
@@ -607,13 +633,13 @@ static void emit_procedure_expression(PQ_Compiler* c)
 
 	if (proc->arg_count != arg_count)
 	{
-		c->error(c->line, "Expected %d arguments for procedure '%s', got %d", proc->arg_count, name, arg_count);
+		C_ERROR("Expected %d arguments for procedure '%.*s', got %d", proc->arg_count, s_fmt(name), arg_count);
 	}
 
 	// )
 	try_eat_token(c, TOKEN_CLOSE_PAREN);
 
-	// Call the procedure
+	// call the procedure
 	push_inst(c, (PQ_Instruction){ INST_CALL, proc->idx });
 }
 
@@ -627,7 +653,7 @@ static void emit_assign_expression(PQ_Compiler* c)
 
 	if (!variable_exists(c, name)) 
 	{
-		c->error(c->line, "Undefined identifier '%s'", name);
+		C_ERROR("Undefined identifier '%.*s'", s_fmt(name));
 	}
 
 	// =...
@@ -635,7 +661,7 @@ static void emit_assign_expression(PQ_Compiler* c)
 
 	if (assign.type != TOKEN_EQUALS)
 	{
-		push_inst(c, (PQ_Instruction){ INST_LOAD_LOCAL, get_or_create_variable(c, name) });
+		push_inst(c, (PQ_Instruction){ INST_LOAD_LOCAL, get_or_create_variable(c, name)->idx });
 	}
 	
 	emit_expression(c);
@@ -650,11 +676,11 @@ static void emit_assign_expression(PQ_Compiler* c)
 		case TOKEN_STAR_EQUALS:    push_inst(c, (PQ_Instruction){ INST_MUL }); break;
 		case TOKEN_PERCENT_EQUALS: push_inst(c, (PQ_Instruction){ INST_MOD }); break;
 
-		default: c->error(c->line, "Unexpected %s", pq_token_to_c_str(assign.type)); break;
+		default: C_ERROR("Unexpected %s", pq_token_to_c_str(assign.type)); break;
 	}
 	
-	push_inst(c, (PQ_Instruction){ INST_STORE_LOCAL, get_or_create_variable(c, name) });
-	push_inst(c, (PQ_Instruction){ INST_LOAD_LOCAL, get_or_create_variable(c, name) });
+	push_inst(c, (PQ_Instruction){ INST_STORE_LOCAL, get_or_create_variable(c, name)->idx });
+	push_inst(c, (PQ_Instruction){ INST_LOAD_LOCAL, get_or_create_variable(c, name)->idx });
 }
 
 // <expr> <op> <expr>
@@ -693,7 +719,7 @@ static void emit_binary_expression(PQ_Compiler* c, int8_t min_precedence)
 		case TOKEN_DOUBLE_AND:    push_inst(c, (PQ_Instruction){ INST_AND }); break; 
 		case TOKEN_DOUBLE_PIPE:   push_inst(c, (PQ_Instruction){ INST_OR }); break; 
 		
-		default: c->error(c->line, "Expected binary operator, got %s", pq_token_to_c_str(op.type)); 
+		default: C_ERROR("Expected binary operator, got %s", pq_token_to_c_str(op.type)); 
 	}
 
 	// next token
@@ -721,6 +747,11 @@ static void emit_expression(PQ_Compiler* c)
 
 	switch (expr.type)
 	{
+		case TOKEN_NULL:
+		{
+			emit_null_expression(c);
+		} break;
+
 		case TOKEN_DASH:
 		{
 			eat_token(c);
@@ -768,7 +799,7 @@ static void emit_expression(PQ_Compiler* c)
 
 		default:
 		{
-			c->error(c->line, "Expected expression, got %s", pq_token_to_c_str(expr.type));
+			C_ERROR("Expected expression, got %s", pq_token_to_c_str(expr.type));
 		} break;
 	}
 
@@ -823,7 +854,7 @@ static void emit_scope(PQ_Compiler* c)
 // statements
 //
 
-// var <ident> = <expr>
+// var <ident> OR var <ident> = <expr>
 static void emit_var_statement(PQ_Compiler* c)
 {
 	// var
@@ -836,25 +867,29 @@ static void emit_var_statement(PQ_Compiler* c)
 
 	if (variable_exists(c, name) || procedure_exists(c, name)) 
 	{
-		c->error(c->line, "Identifier '%.*s' redefined", s_fmt(name));
+		C_ERROR("Identifier '%.*s' redefined", s_fmt(name));
 	}
 
 	if (c->current_proc && c->current_scope == &c->current_proc->scope) 
 	{
 		c->current_proc->local_count++;
 	}
-	else if (!c->current_proc)
-	{
-		c->top_variable_count++;
-	}
 
 	// =
-	try_eat_token(c, TOKEN_EQUALS);
+	if (peek_token(c, 0).type == TOKEN_EQUALS)
+	{
+		eat_token(c);
+		
+		// <expr>
+		emit_expression(c);
+	}
+	// declaration, initialize with null
+	else
+	{
+		push_inst(c, (PQ_Instruction){ INST_LOAD_NULL });
+	}
 
-	// <expr>
-	emit_expression(c);
-
-	push_inst(c, (PQ_Instruction){ INST_STORE_LOCAL, get_or_create_variable(c, name) });
+	push_inst(c, (PQ_Instruction){ INST_STORE_LOCAL, get_or_create_variable(c, name)->idx });
 }
 
 // define <ident>(<ident>, <ident>...) { ... }
@@ -865,7 +900,7 @@ static void emit_define_statement(PQ_Compiler* c)
 
 	if (c->current_proc)
 	{
-		c->error(c->line, "Cannot define procedure inside another one");
+		C_ERROR("Cannot define procedure inside another one");
 	}
 
 	// <ident>
@@ -875,10 +910,12 @@ static void emit_define_statement(PQ_Compiler* c)
 
 	if (variable_exists(c, name) || procedure_exists(c, name)) 
 	{
-		c->error(c->line, "Identifier '%s' redefined", name);
+		C_ERROR("Identifier '%.*s' redefined", s_fmt(name));
 	}
 
 	PQ_Procedure* proc = get_or_create_procedure(c, name);
+
+	c->current_proc = proc;
 
 	// (
 	PQ_Token open = try_eat_token(c, TOKEN_OPEN_PAREN);
@@ -889,7 +926,7 @@ static void emit_define_statement(PQ_Compiler* c)
 		// check for (,<ident>
 		if (peek_token(c, -1).type == TOKEN_OPEN_PAREN && peek_token(c, 0).type == TOKEN_COMMA)
 		{
-			c->error(c->line, "Expected argument after `(` in procedure definition, got `,`");
+			C_ERROR("Expected argument after `(` in procedure definition, got `,`");
 		}
 
 		// <ident>
@@ -899,7 +936,7 @@ static void emit_define_statement(PQ_Compiler* c)
 
 		if (variable_exists(c, name))
 		{
-			c->error(c->line, "Argument/variable redefinition in procedure definition");
+			C_ERROR("Argument/variable redefinition in procedure definition");
 		}
 
 		get_or_create_variable(c, name);
@@ -914,7 +951,7 @@ static void emit_define_statement(PQ_Compiler* c)
 			// Check for <ident>,)
 			if (peek_token(c, 0).type == TOKEN_CLOSE_PAREN)
 			{
-				c->error(c->line, "Expected argument after `,` in procedure definition, got `)`");
+				C_ERROR("Expected argument after `,` in procedure definition, got `)`");
 			}
 		}
 	}
@@ -931,21 +968,21 @@ static void emit_define_statement(PQ_Compiler* c)
 	// move the local index back to the first argument
 	proc->scope.local_base = c->variable_count - proc->arg_count;
 
-	c->current_proc = proc;
-
 	// { ... }
 	while (peek_token(c, 0).type != TOKEN_CLOSE_BRACE)
 	{
 		emit_statement(c);
 	}
 
-	// if we didn't emit a `return`, return nothing. 
-	if (!proc->returns_value)
+	// regardless of returning anything, all procedures will
+	// return `null`. a return statement beforehand would circumvent these
+	// instructions. 
+	if (c->instructions[c->instruction_count - 1].type != INST_RETURN)
 	{
 		push_inst(c, (PQ_Instruction){ INST_LOAD_NULL });
 		push_inst(c, (PQ_Instruction){ INST_RETURN });
 	}
-
+	
 	// }
 	end_scope(c, &proc->scope);
 
@@ -960,12 +997,8 @@ static void emit_return_statement(PQ_Compiler* c)
 {
 	if (!c->current_proc)
 	{
-		c->error(c->line, "Cannot use return outside procedure");
+		C_ERROR("Cannot use return outside procedure");
 	}
-
-	// at some point in the procedure we will return a value that's not UNDEFINED. 
-	// NOTE: might be an issue if a value is not returned every path
-	c->current_proc->returns_value = true;
 
 	// return
 	eat_token(c);
@@ -1012,9 +1045,9 @@ static void emit_repeat_statement(PQ_Compiler* c)
 	// {
 	begin_scope(c, &loop.scope);
 
-	String name = str_format(c->arena, "repeat_local_%d", loop.scope.local_base);
+	String name = str_format(c->arena, "__repeat_local_%d", loop.scope.local_base);
 
-	loop.local = get_or_create_variable(c, name);
+	loop.local = get_or_create_variable(c, name)->idx;
 
 	// repeat_local = <expr>
 	push_inst(c, (PQ_Instruction){ INST_STORE_LOCAL, loop.local });
@@ -1263,7 +1296,7 @@ static void emit_break_statement(PQ_Compiler* c)
 {
 	if (!c->current_loop)
 	{
-		c->error(c->line, "Cannot use break outside a loop.");
+		C_ERROR("Cannot use break outside a loop.");
 	}
 
 	// break
@@ -1289,7 +1322,7 @@ static void emit_foreign_define_statement(PQ_Compiler* c)
 
 	if (variable_exists(c, name) || procedure_exists(c, name)) 
 	{
-		c->error(c->line, "Identifier '%s' redefined", name);
+		C_ERROR("Identifier '%.*s' redefined", s_fmt(name));
 	}
 
 	PQ_Procedure* proc = get_or_create_procedure(c, name);
@@ -1305,7 +1338,7 @@ static void emit_foreign_define_statement(PQ_Compiler* c)
 		// Check for (,<ident>
 		if (peek_token(c, -1).type == TOKEN_OPEN_PAREN && peek_token(c, 0).type == TOKEN_COMMA)
 		{
-			c->error(c->line, "Expected expression after `(` in foreign procedure declaration, got `,`");
+			C_ERROR("Expected expression after `(` in foreign procedure declaration, got `,`");
 		}
 
 		// <ident>
@@ -1321,7 +1354,7 @@ static void emit_foreign_define_statement(PQ_Compiler* c)
 			// Check for <ident>,)
 			if (peek_token(c, 0).type == TOKEN_CLOSE_PAREN)
 			{
-				c->error(c->line, "Expected expression after `,` in foreign procedure declaration, got `)`");
+				C_ERROR("Expected expression after `,` in foreign procedure declaration, got `)`");
 			}
 		}
 	}
@@ -1421,17 +1454,17 @@ static void emit_statement(PQ_Compiler* c)
 		{
 			if (peek_token(c, 1).type == TOKEN_IF)
 			{
-				c->error(c->line, "Expected if statement before else if.");
+				C_ERROR("Expected if statement before else if.");
 			}
 			else
 			{
-				c->error(c->line, "Expected if or else if statement before else.");
+				C_ERROR("Expected if or else if statement before else.");
 			}
 		} break;
 
 		default:
 		{
-			c->error(c->line, "Expected statement, got %s", pq_token_to_c_str(peek_token(c, 0).type));
+			C_ERROR("Expected statement, got %s", pq_token_to_c_str(peek_token(c, 0).type));
 		} break;
 	}
 }
@@ -1452,7 +1485,7 @@ static void generate(PQ_Compiler* c)
 // interface
 //
 
-void pq_compiler_init(PQ_Compiler* c, Arena* arena, String source, PQ_CompilerErrorFn error)
+void pq_init_compiler(PQ_Compiler* c, Arena* arena, String source, PQ_CompilerErrorFn error)
 {
 	c->arena = arena;
 
@@ -1472,9 +1505,8 @@ void pq_compiler_init(PQ_Compiler* c, Arena* arena, String source, PQ_CompilerEr
 	c->procedures = arena_push_array(c->arena, PQ_Procedure, PQ_MAX_PROCEDURES);
 	c->procedure_count = 0;
 
-	c->variables = arena_push_array(c->arena, String, PQ_MAX_VARIABLES);
+	c->variables = arena_push_array(c->arena, PQ_Variable, PQ_MAX_VARIABLES);
 	c->variable_count = 0;
-	c->top_variable_count = 0;
 
 	c->current_scope = nullptr;
 	c->current_proc = nullptr;
@@ -1483,6 +1515,10 @@ void pq_compiler_init(PQ_Compiler* c, Arena* arena, String source, PQ_CompilerEr
 	c->line = 1;
 	c->idx = 0;
 }
+
+//
+// serialization
+//
 
 static void write_to_blob(void* v, PQ_CompiledBlob* b, size_t type_size)
 {
@@ -1508,7 +1544,7 @@ static void write_immediates(PQ_Compiler* c, PQ_CompiledBlob* b)
 
 		switch (v.type)
 		{
-			case VALUE_UNDEFINED: break;
+			case VALUE_NULL: break;
 
 			case VALUE_NUMBER:  write_to_blob(&v.n, b, sizeof(float)); break;
 			case VALUE_BOOLEAN: write_to_blob(&v.b, b, sizeof(bool)); break;
@@ -1540,6 +1576,18 @@ static void write_procedures(PQ_Compiler* c, PQ_CompiledBlob* b)
 		write_to_blob(&p.local_count, b, sizeof(uint8_t));
 		write_to_blob(&p.arg_count, b, sizeof(uint8_t));
 		write_to_blob(&p.scope.first_inst, b, sizeof(uint16_t));
+	
+		if (p.foreign)
+		{
+			for (size_t i = 0; i < p.name.length; i++)
+			{
+				write_to_blob(&p.name.buffer[i], b, sizeof(char));
+			}
+
+			char n = '\0';
+
+			write_to_blob(&n, b, sizeof(char));
+		}
 	}
 }
 
@@ -1560,6 +1608,14 @@ static void write_instructions(PQ_Compiler* c, PQ_CompiledBlob* b)
 	}
 }
 
+static void write_blob(PQ_Compiler* c, PQ_CompiledBlob* b)
+{
+	write_magic(c, b);
+	write_immediates(c, b);
+	write_procedures(c, b);
+	write_instructions(c, b);
+}
+
 PQ_CompiledBlob pq_compile(PQ_Compiler* c)
 {
 	tokenize(c);
@@ -1570,11 +1626,22 @@ PQ_CompiledBlob pq_compile(PQ_Compiler* c)
 	b.buffer = arena_push_array(c->arena, uint8_t, PQ_MAX_BLOB_SIZE);
 	b.size = 0;	
 
-	write_magic(c, &b);
-
-	write_immediates(c, &b);
-	write_procedures(c, &b);
-	write_instructions(c, &b);
+	write_blob(c, &b);
 
 	return b;
 }
+
+void pq_declare_foreign_proc(PQ_Compiler* c, String name, uint8_t arg_count)
+{
+	if (procedure_exists(c, name))
+	{
+		C_ERROR("Procedure '%.*s' redeclared", s_fmt(name));
+	}
+
+	PQ_Procedure* proc = get_or_create_procedure(c, name);
+
+	proc->foreign = true;
+	proc->arg_count = arg_count;
+}
+
+#undef C_ERROR

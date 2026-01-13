@@ -1,16 +1,14 @@
 #include <pq/vm.h>
 
-#define VERIFY_STACK_OVERFLOW() \
-	if (vm->stack_size >= PQ_MAX_STACK_SIZE) \
+// HACK!
+#define VM_ERROR(...) \
+	do \
 	{ \
-		return TRAP_STACK_OVERFLOW; \
-	}
-
-#define VERIFY_STACK_UNDERFLOW() \
-	if (vm->stack_size <= 0) \
-	{ \
-		return TRAP_STACK_UNDERFLOW; \
-	}
+		char what[2048]; \
+		sprintf(what, __VA_ARGS__); \
+		vm->error(what); \
+		vm->halt = true; \
+	} while (0);
 
 //
 // serialization
@@ -30,7 +28,7 @@ static void read_magic(PQ_VM* vm, const PQ_CompiledBlob* b)
 
 	if (magic != __builtin_bswap32('PIQR'))
 	{
-		vm->error("Invalid magic");
+		VM_ERROR("Invalid magic");
 	}
 }
 
@@ -48,7 +46,7 @@ static void read_immediates(PQ_VM* vm, const PQ_CompiledBlob* b)
 
 		switch (v.type)
 		{
-			case VALUE_UNDEFINED: break;
+			case VALUE_NULL: break;
 			
 			case VALUE_NUMBER:  read_from_blob(vm, b, &v.n, sizeof(float)); break; 
 			case VALUE_BOOLEAN: read_from_blob(vm, b, &v.b, sizeof(bool)); break; 
@@ -66,7 +64,7 @@ static void read_immediates(PQ_VM* vm, const PQ_CompiledBlob* b)
 				v.s = str_copy_c_str_from_to(vm->arena, (char*)b->buffer, start, end);
 			} break;
 
-			default: vm->error("Invalid value type");
+			default: VM_ERROR("Invalid value type");
 		}
 
 		vm->immediates[i] = v;
@@ -87,7 +85,20 @@ static void read_procedures(PQ_VM* vm, const PQ_CompiledBlob* b)
 		read_from_blob(vm, b, &pi.local_count, sizeof(uint8_t));
 		read_from_blob(vm, b, &pi.arg_count, sizeof(uint8_t));
 		read_from_blob(vm, b, &pi.first_inst, sizeof(uint16_t));
+
+		if (pi.foreign)
+		{
+			uint16_t start = vm->bp;
+			uint16_t end = start;
 	
+			while (b->buffer[vm->bp++])
+			{
+				end++;
+			}
+			
+			pi.foreign_name = str_copy_c_str_from_to(vm->arena, (char*)b->buffer, start, end);
+		}
+		
 		vm->proc_infos[i] = pi;
 	}
 }
@@ -128,36 +139,34 @@ static void read_blob(PQ_VM* vm, const PQ_CompiledBlob* b)
 #define VERIFY_STACK_OVERFLOW() \
 	if (vm->stack_size >= PQ_MAX_STACK_SIZE) \
 	{ \
-		return TRAP_STACK_OVERFLOW; \
+		VM_ERROR("Stack overflow"); \
 	}
 
 #define VERIFY_STACK_UNDERFLOW() \
 	if (vm->stack_size <= 0) \
 	{ \
-		return TRAP_STACK_UNDERFLOW; \
+		VM_ERROR("Stack underflow"); \
 	}
 
-static PQ_Trap LOAD_NULL(PQ_VM* vm)
+static void LOAD_NULL(PQ_VM* vm)
 {
 	VERIFY_STACK_OVERFLOW();
 
-	vm->stack[vm->stack_size++] = pq_value_undefined();
+	vm->stack[vm->stack_size++] = pq_value_null();
 
 	vm->ip++;
-
-	return TRAP_SUCCESS;
 }
 
-static PQ_Trap CALL(PQ_VM* vm, uint16_t idx)
+static void CALL(PQ_VM* vm, uint16_t idx)
 {
 	if (idx >= vm->proc_info_count)
 	{
-		return TRAP_OUT_OF_BOUNDS;
+		VM_ERROR("Callee index out of bounds");
 	}
 
 	if (vm->call_frame_count >= PQ_MAX_CALL_FRAMES)
 	{
-		return TRAP_STACK_OVERFLOW;
+		VM_ERROR("Call frame overflow");
 	}
 	
 	PQ_ProcedureInfo pi = vm->proc_infos[idx];
@@ -168,10 +177,9 @@ static PQ_Trap CALL(PQ_VM* vm, uint16_t idx)
 
 	cf->arg_count = pi.arg_count;
 	cf->local_count = pi.local_count;
-	
-	cf->stack_base = vm->stack_size;
+
 	cf->local_base = vm->local_count;
-	
+
 	// push arguments
 	for (uint8_t i = 0; i < cf->arg_count; i++) 
 	{
@@ -180,48 +188,54 @@ static PQ_Trap CALL(PQ_VM* vm, uint16_t idx)
 		vm->locals[vm->local_count++] = vm->stack[--vm->stack_size];
 	}
 
+	cf->stack_base = vm->stack_size;
+	
 	if (!pi.foreign)
 	{
 		// push locals found in procedure
 		for (uint8_t i = cf->arg_count; i < cf->local_count; i++) 
 		{
-			vm->locals[vm->local_count++] = pq_value_undefined();
+			vm->locals[vm->local_count++] = pq_value_null();
 		}
 		
 		vm->ip = pi.first_inst;
 	}
+	// foreign procedures use a different calling "convention".
+	//
+	// instead of relying on a pregenerated return call, 
+	// they call their function pointer, clean up the call frame
+	// and move on
 	else
 	{
-		// if the procedure is foreign, clean up manually
 		if (!pi.proc)
 		{
-			return TRAP_UNDEFINED_FOREIGN;
+
+			VM_ERROR("Undefined foreign procedure '%.*s'", s_fmt(pi.foreign_name));
 		}
 
 		pi.proc(vm);
 
-		VERIFY_STACK_UNDERFLOW();
+		PQ_Value ret = vm->stack[--vm->stack_size];
 
-		if (vm->stack[vm->stack_size - 1].type == VALUE_UNDEFINED)
+		PQ_CallFrame cf = vm->call_frames[--vm->call_frame_count];
+
+		vm->stack_size = cf.stack_base;
+		vm->local_count = cf.local_base + cf.arg_count;
+
+		if (ret.type != VALUE_NULL)
 		{
-			--vm->stack_size;
+			vm->stack[vm->stack_size++] = ret;
 		}
-
-		const PQ_CallFrame cf = vm->call_frames[--vm->call_frame_count];
-
-		vm->local_count = cf.local_base;
-
+		
 		vm->ip++;
 	}
-
-	return TRAP_SUCCESS;
 }
 
-static PQ_Trap LOAD_IMMEDIATE(PQ_VM* vm, uint16_t idx)
+static void LOAD_IMMEDIATE(PQ_VM* vm, uint16_t idx)
 {
 	if (idx >= vm->immediate_count)
 	{
-		return TRAP_OUT_OF_BOUNDS;
+		VM_ERROR("Immediate index out of bounds");
 	}
 
 	VERIFY_STACK_OVERFLOW();
@@ -229,11 +243,9 @@ static PQ_Trap LOAD_IMMEDIATE(PQ_VM* vm, uint16_t idx)
 	vm->stack[vm->stack_size++] = vm->immediates[idx];
 
 	vm->ip++;
-
-	return TRAP_SUCCESS;
 }
 
-static PQ_Trap LOAD_LOCAL(PQ_VM* vm, uint16_t idx)
+static void LOAD_LOCAL(PQ_VM* vm, uint16_t idx)
 {
 	if (vm->call_frame_count > 0)
 	{
@@ -242,7 +254,7 @@ static PQ_Trap LOAD_LOCAL(PQ_VM* vm, uint16_t idx)
 
 	if (idx >= PQ_MAX_LOCALS)
 	{
-		return TRAP_OUT_OF_BOUNDS;
+		VM_ERROR("Local index out of bounds");
 	}
 
 	VERIFY_STACK_OVERFLOW();
@@ -250,11 +262,9 @@ static PQ_Trap LOAD_LOCAL(PQ_VM* vm, uint16_t idx)
 	vm->stack[vm->stack_size++] = vm->locals[idx];
 
 	vm->ip++;
-
-	return TRAP_SUCCESS;
 }
 
-static PQ_Trap STORE_LOCAL(PQ_VM* vm, uint16_t idx)
+static void STORE_LOCAL(PQ_VM* vm, uint16_t idx)
 {
 	if (vm->call_frame_count > 0)
 	{
@@ -263,7 +273,7 @@ static PQ_Trap STORE_LOCAL(PQ_VM* vm, uint16_t idx)
 
 	if (idx >= PQ_MAX_LOCALS)
 	{
-		return TRAP_OUT_OF_BOUNDS;
+		VM_ERROR("Local index out of bounds");
 	}
 
 	VERIFY_STACK_UNDERFLOW();
@@ -271,34 +281,28 @@ static PQ_Trap STORE_LOCAL(PQ_VM* vm, uint16_t idx)
 	vm->locals[idx] = vm->stack[--vm->stack_size];
 
 	vm->ip++;
-
-	return TRAP_SUCCESS;
 }
 
-static PQ_Trap JUMP(PQ_VM* vm, uint16_t to)
+static void JUMP(PQ_VM* vm, uint16_t to)
 {
 	if (to >= vm->instruction_count)
 	{
-		return TRAP_OUT_OF_BOUNDS;
+		VM_ERROR("Instruction pointer out of bounds");
 	}
 
 	vm->ip = to;
-
-	return TRAP_SUCCESS;
 }
 
-static PQ_Trap JUMP_COND(PQ_VM* vm, uint16_t to)
+static void JUMP_COND(PQ_VM* vm, uint16_t to)
 {
 	if (to >= vm->instruction_count)
 	{
-		return TRAP_OUT_OF_BOUNDS;
+		VM_ERROR("Jump target out of bounds");
 	}
 
 	VERIFY_STACK_UNDERFLOW();
 
 	vm->ip = pq_value_as_boolean(vm->stack[--vm->stack_size]) ? to : vm->ip + 1;
-
-	return TRAP_SUCCESS;
 }
 
 // these ones are very repetative
@@ -317,7 +321,7 @@ static PQ_Trap JUMP_COND(PQ_VM* vm, uint16_t to)
 	OP(LESS, less)
 
 #define OP(name, op) \
-	static PQ_Trap name(PQ_VM* vm) \
+	static void name(PQ_VM* vm) \
 	{ \
 		VERIFY_STACK_UNDERFLOW(); \
 		\
@@ -333,12 +337,12 @@ static PQ_Trap JUMP_COND(PQ_VM* vm, uint16_t to)
 		\
 		vm->ip++; \
 		\
-		return TRAP_SUCCESS; \
+		 \
 	}
 
 DEFINE_OPS
 
-static PQ_Trap NOT(PQ_VM* vm)
+static void NOT(PQ_VM* vm)
 {
 	VERIFY_STACK_UNDERFLOW();
 
@@ -349,11 +353,9 @@ static PQ_Trap NOT(PQ_VM* vm)
 	vm->stack[vm->stack_size++] = pq_value_not(l);
 
 	vm->ip++;
-
-	return TRAP_SUCCESS;
 }
 
-static PQ_Trap NEGATE(PQ_VM* vm)
+static void NEGATE(PQ_VM* vm)
 {
 	VERIFY_STACK_UNDERFLOW();
 
@@ -364,48 +366,43 @@ static PQ_Trap NEGATE(PQ_VM* vm)
 	vm->stack[vm->stack_size++] = pq_value_mul(l, pq_value_number(-1.0f));
 
 	vm->ip++;
-
-	return TRAP_SUCCESS;
 }
 
-static PQ_Trap RETURN(PQ_VM* vm)
+static void RETURN(PQ_VM* vm)
 {
-	VERIFY_STACK_UNDERFLOW();
-
-	if (vm->stack[vm->stack_size - 1].type == VALUE_UNDEFINED)
-	{
-		--vm->stack_size;
-	}
-
 	if (vm->call_frame_count <= 0)
 	{
-		return TRAP_STACK_UNDERFLOW;
+		VM_ERROR("Call frame underflow");
 	}
 
-	const PQ_CallFrame cf = vm->call_frames[--vm->call_frame_count];
+	VERIFY_STACK_UNDERFLOW();
+
+	PQ_Value ret = vm->stack[--vm->stack_size];
+
+	PQ_CallFrame cf = vm->call_frames[--vm->call_frame_count];
 
 	vm->stack_size = cf.stack_base;
 	vm->local_count = cf.local_base;
 
-	vm->ip = cf.return_ip;
+	vm->stack[vm->stack_size++] = ret;
 
-	return TRAP_SUCCESS;
+	vm->ip = cf.return_ip;
 }
 
-static PQ_Trap HALT(PQ_VM* vm)
+static void HALT(PQ_VM* vm)
 {
 	vm->stack_size = 0;
 	vm->local_count = 0;
 	vm->call_frame_count = 0;
 
-	return TRAP_HALT_EXECUTION;
+	vm->halt = true;
 }
 
-void pq_vm_init(PQ_VM* vm, Arena* arena, const PQ_CompiledBlob* b, PQ_VMErrorFn error)
+void pq_init_vm(PQ_VM* vm, Arena* arena, const PQ_CompiledBlob* b, PQ_VMErrorFn error)
 {
 	if (b->size > PQ_MAX_BLOB_SIZE)
 	{
-		vm->error("Provided blob is too big");
+		VM_ERROR("Provided blob is too big");
 	}
 
 	vm->arena = arena;
@@ -417,61 +414,51 @@ void pq_vm_init(PQ_VM* vm, Arena* arena, const PQ_CompiledBlob* b, PQ_VMErrorFn 
 	vm->call_frames = arena_push_array(arena, PQ_CallFrame, PQ_MAX_CALL_FRAMES);
 	vm->stack = arena_push_array(arena, PQ_Value, PQ_MAX_STACK_SIZE);
 	vm->locals = arena_push_array(arena, PQ_Value, PQ_MAX_LOCALS);
+
+	vm->halt = false;
 }
 
-PQ_Trap pq_vm_execute(PQ_VM* vm)
+bool pq_execute(PQ_VM* vm)
 {
-	PQ_Trap r = TRAP_SUCCESS;
-
 	if (vm->ip >= vm->instruction_count)
 	{
-		return TRAP_OUT_OF_BOUNDS;
+		VM_ERROR("Instruction pointer out of bounds");;
 	}
 
 	PQ_Instruction it = vm->instructions[vm->ip];
 
 	switch (it.type)
 	{
-		case INST_CALL:           r = CALL(vm, it.arg); break;
-		case INST_LOAD_NULL:      r = LOAD_NULL(vm);break;
-		case INST_LOAD_IMMEDIATE: r = LOAD_IMMEDIATE(vm, it.arg); break;
-		case INST_LOAD_LOCAL:     r = LOAD_LOCAL(vm, it.arg); break;
-		case INST_STORE_LOCAL:    r = STORE_LOCAL(vm, it.arg); break;
-		case INST_JUMP:           r = JUMP(vm, it.arg); break;
-		case INST_JUMP_COND:      r = JUMP_COND(vm, it.arg); break;
-		case INST_ADD:            r = ADD(vm); break;
-		case INST_SUB:            r = SUB(vm); break;
-		case INST_DIV:            r = DIV(vm); break;
-		case INST_MUL:            r = MUL(vm); break;
-		case INST_MOD:            r = MOD(vm); break;
-		case INST_OR:             r = OR(vm); break;
-		case INST_GREATER_THAN:   r = GREATER_THAN(vm); break;
-		case INST_LESS_THAN:      r = LESS_THAN(vm); break;
-		case INST_EQUALS:         r = EQUALS(vm); break;
-		case INST_GREATER:        r = GREATER(vm); break;
-		case INST_LESS:           r = LESS(vm); break;
-		case INST_NOT:            r = NOT(vm); break;
-		case INST_NEGATE:         r = NEGATE(vm); break;
-		case INST_RETURN:         r = RETURN(vm); break;
-		case INST_HALT:           r = HALT(vm); break;
+		case INST_CALL:           CALL(vm, it.arg); break;
+		case INST_LOAD_NULL:      LOAD_NULL(vm);break;
+		case INST_LOAD_IMMEDIATE: LOAD_IMMEDIATE(vm, it.arg); break;
+		case INST_LOAD_LOCAL:     LOAD_LOCAL(vm, it.arg); break;
+		case INST_STORE_LOCAL:    STORE_LOCAL(vm, it.arg); break;
+		case INST_JUMP:           JUMP(vm, it.arg); break;
+		case INST_JUMP_COND:      JUMP_COND(vm, it.arg); break;
+		case INST_ADD:            ADD(vm); break;
+		case INST_SUB:            SUB(vm); break;
+		case INST_DIV:            DIV(vm); break;
+		case INST_MUL:            MUL(vm); break;
+		case INST_MOD:            MOD(vm); break;
+		case INST_OR:             OR(vm); break;
+		case INST_GREATER_THAN:   GREATER_THAN(vm); break;
+		case INST_LESS_THAN:      LESS_THAN(vm); break;
+		case INST_EQUALS:         EQUALS(vm); break;
+		case INST_GREATER:        GREATER(vm); break;
+		case INST_LESS:           LESS(vm); break;
+		case INST_NOT:            NOT(vm); break;
+		case INST_NEGATE:         NEGATE(vm); break;
+		case INST_RETURN:         RETURN(vm); break;
+		case INST_HALT:           HALT(vm); break;
 
-		default: r = TRAP_ILLEGAL_INSTRUCTION; break;
+		default: VM_ERROR("Illegal instruction");
 	}
 
-	return r;
+	return !vm->halt;
 }
 
-PQ_Value pq_vm_pop(PQ_VM* vm)
-{
-	return vm->stack[--vm->stack_size];
-}
-
-void pq_vm_push(PQ_VM* vm, PQ_Value v)
-{
-	vm->stack[vm->stack_size++] = v;
-}
-
-PQ_Value pq_vm_get_local(PQ_VM* vm, uint8_t index)
+PQ_Value pq_get_local(PQ_VM* vm, uint8_t index)
 {
 	if (vm->call_frame_count > 0)
 	{
@@ -481,7 +468,25 @@ PQ_Value pq_vm_get_local(PQ_VM* vm, uint8_t index)
 	return vm->locals[index];
 }
 
-void pq_vm_bind_procedure(PQ_VM* vm, uint8_t index, PQ_NativeProcedure proc)
+PQ_Value pq_pop(PQ_VM* vm)
 {
-	vm->proc_infos[index].proc = proc;
+	return vm->stack[--vm->stack_size];
+}
+
+void pq_push(PQ_VM* vm, PQ_Value v)
+{
+	vm->stack[vm->stack_size++] = v;
+}
+
+void pq_bind_foreign_proc(PQ_VM* vm, String name, PQ_NativeProcedure proc)
+{
+	for (uint8_t i = 0; i < vm->proc_info_count; i++)
+	{
+		PQ_ProcedureInfo* pi = &vm->proc_infos[i];
+
+		if (str_equals(name, pi->foreign_name))
+		{
+			pi->proc = proc;
+		}
+	}
 }

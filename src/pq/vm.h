@@ -24,41 +24,16 @@ typedef void (*PQ_NativeProcedure)(PQ_VM* vm);
 typedef struct
 {
 	bool foreign;
+
 	uint8_t local_count;
 	uint8_t arg_count;
 	uint16_t first_inst;
 
+	String foreign_name;
 	PQ_NativeProcedure proc;
 } PQ_ProcedureInfo;
 
-typedef enum : uint8_t
-{
-	TRAP_SUCCESS,
-	TRAP_STACK_OVERFLOW,
-	TRAP_STACK_UNDERFLOW,
-	TRAP_OUT_OF_BOUNDS,
-	TRAP_ILLEGAL_INSTRUCTION,
-	TRAP_HALT_EXECUTION,
-	TRAP_UNDEFINED_FOREIGN,
-} PQ_Trap;
-
-static inline const char* pq_trap_to_c_str(PQ_Trap trap)
-{
-	switch (trap)
-	{
-		case TRAP_SUCCESS: return "Success";
-		case TRAP_STACK_OVERFLOW: return "Stack overflow";
-		case TRAP_STACK_UNDERFLOW: return "Stack underflow";
-		case TRAP_OUT_OF_BOUNDS: return "Out of bounds";
-		case TRAP_ILLEGAL_INSTRUCTION: return "Illegal instruction";
-		case TRAP_HALT_EXECUTION: return "Execution halted";
-		case TRAP_UNDEFINED_FOREIGN: return "Undefined foreign";
-	}
-
-	return "unknown";
-}
-
-typedef void (*PQ_VMErrorFn)(const char*, ...);
+typedef void (*PQ_VMErrorFn)(const char*);
 
 struct PQ_VM 
 {
@@ -84,18 +59,24 @@ struct PQ_VM
 	PQ_Value* locals;
 	uint8_t local_count;
 
+	bool halt;
+
 	uint16_t ip;
 	uint16_t bp;
 };
 
-void pq_vm_init(PQ_VM* vm, Arena* arena, const PQ_CompiledBlob* b, PQ_VMErrorFn error);
+void pq_init_vm(PQ_VM* vm, Arena* arena, const PQ_CompiledBlob* b, PQ_VMErrorFn error);
 
-PQ_Trap pq_vm_execute(PQ_VM* vm);
+bool pq_execute(PQ_VM* vm);
 
-PQ_Value pq_vm_get_local(PQ_VM* vm, uint8_t index);
+PQ_Value pq_get_local(PQ_VM* vm, uint8_t index);
 
-PQ_Value pq_vm_pop(PQ_VM* vm);
+PQ_Value pq_pop(PQ_VM* vm);
 
-void pq_vm_push(PQ_VM* vm, PQ_Value v);
+void pq_push(PQ_VM* vm, PQ_Value v);
 
-void pq_vm_bind_procedure(PQ_VM* vm, uint8_t index, PQ_NativeProcedure proc);
+#define pq_return(vm) pq_push((vm), pq_value_null());
+
+#define pq_return_value(vm, ...) pq_push((vm), (__VA_ARGS__))
+
+void pq_bind_foreign_proc(PQ_VM* vm, String name, PQ_NativeProcedure proc);

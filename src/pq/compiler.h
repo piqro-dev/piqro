@@ -21,7 +21,6 @@ typedef struct
 	uint8_t local_count;
 	uint8_t arg_count;
 
-	bool returns_value;
 	bool foreign;
 
 	PQ_Scope scope;
@@ -34,7 +33,16 @@ typedef struct
 	PQ_Scope scope;
 } PQ_Loop;
 
-typedef void (*PQ_CompilerErrorFn)(uint16_t, const char*, ...);
+typedef struct 
+{
+	String name;
+
+	uint8_t idx;
+
+	PQ_Procedure* proc;
+} PQ_Variable;
+
+typedef void (*PQ_CompilerErrorFn)(uint16_t, const char*);
 
 typedef struct 
 {
@@ -56,9 +64,8 @@ typedef struct
 	PQ_Procedure* procedures;
 	uint16_t procedure_count;
 
-	String* variables;
+	PQ_Variable* variables;
 	uint16_t variable_count;
-	uint16_t top_variable_count;
 
 	PQ_Scope* current_scope;
 	PQ_Procedure* current_proc;
@@ -68,6 +75,8 @@ typedef struct
 	uint16_t idx;
 } PQ_Compiler;
 
-void pq_compiler_init(PQ_Compiler* c, Arena* arena, String source, PQ_CompilerErrorFn error);
+void pq_init_compiler(PQ_Compiler* c, Arena* arena, String source, PQ_CompilerErrorFn error);
 
 PQ_CompiledBlob pq_compile(PQ_Compiler* c);
+
+void pq_declare_foreign_proc(PQ_Compiler* c, String name, uint8_t arg_count);

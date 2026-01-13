@@ -7,16 +7,26 @@
 	<link rel="stylesheet" type="text/css" href="style.css">
 </head>
 <body>
-	<div class="root-container">
-		<div class="toolbar"> 
+	<div id="root-container">
+		<div id="toolbar"> 
 		</div>
 
-		<div class="text-editor">
-			<textarea></textarea>
-				<button id="compile-button">compile</button>
+		<div id="code-editor">
+			<div id="code-editor-container">
+				<textarea id="editor"></textarea>
+
+				<div id="code-editor-buttons">
+					<button id="run-button">run</button>
+					<button id="export-button">export</button>
+				</div>
+			</div>
 		</div>
 	
-		<div class="canvas"> 
+		<div id="canvas">
+			<div id="canvas-container">
+				<canvas id="main-canvas" width="240" height="320">
+				</canvas>
+			</div>
 		</div>
 	</div>
 

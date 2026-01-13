@@ -12,7 +12,7 @@
 
 typedef enum : uint8_t
 {
-	VALUE_UNDEFINED,
+	VALUE_NULL,
 	VALUE_NUMBER,
 	VALUE_BOOLEAN,
 	VALUE_STRING,
@@ -30,21 +30,22 @@ typedef struct
 	};
 } PQ_Value;
 
-#define pq_value_undefined()   ((PQ_Value){ VALUE_UNDEFINED })
+#define pq_value_null()     ((PQ_Value){ VALUE_NULL })
 
-#define pq_value_number(v)     ((PQ_Value){ VALUE_NUMBER, .n = (float)(v) })
+#define pq_value_number(v)  ((PQ_Value){ VALUE_NUMBER, .n = (float)(v) })
 
-#define pq_value_boolean(v)    ((PQ_Value){ VALUE_BOOLEAN, .b = (bool)(v) })
+#define pq_value_boolean(v) ((PQ_Value){ VALUE_BOOLEAN, .b = (bool)(v) })
 
-#define pq_value_string(v)     ((PQ_Value){ VALUE_STRING, .s = v })
+#define pq_value_string(v)  ((PQ_Value){ VALUE_STRING, .s = v })
 
 static inline float pq_value_as_number(const PQ_Value v)
 {
 	switch (v.type) 
 	{
-		case VALUE_UNDEFINED: return 0.0f;
-		case VALUE_NUMBER:    return v.n;
-		case VALUE_BOOLEAN:   return (float)v.b;
+		case VALUE_NULL:    return __builtin_nanf("");
+		case VALUE_NUMBER:  return v.n;
+		case VALUE_BOOLEAN: return (float)v.b;
+		case VALUE_STRING:  return 0.0f;
 
 		default: return 0.0f;
 	}
@@ -54,9 +55,10 @@ static inline bool pq_value_as_boolean(const PQ_Value v)
 {
 	switch (v.type) 
 	{
-		case VALUE_UNDEFINED: return (bool)v.n;
-		case VALUE_NUMBER:    return false;
-		case VALUE_BOOLEAN:   return v.b;
+		case VALUE_NULL:    return false;
+		case VALUE_NUMBER:  return (bool)v.n;
+		case VALUE_STRING:  return false;
+		case VALUE_BOOLEAN: return v.b;
 
 		default: return false;
 	}
@@ -66,10 +68,10 @@ static inline String pq_value_as_string(Arena* arena, const PQ_Value v)
 {
 	switch (v.type) 
 	{
-		case VALUE_NUMBER:    return str_format(arena, "%f", v.n);
-		case VALUE_BOOLEAN:   return str_format(arena, "%s", v.b ? "true" : "false");
-		case VALUE_STRING:    return str_copy_from_to(arena, v.s, 1, v.s.length - 1);
-		case VALUE_UNDEFINED: return str_copy_c_str(arena, "(undefined)");
+		case VALUE_NUMBER:  return str_format(arena, "%f", v.n);
+		case VALUE_BOOLEAN: return str_format(arena, "%s", v.b ? "true" : "false");
+		case VALUE_STRING:  return str_copy_from_to(arena, v.s, 1, v.s.length - 1);
+		case VALUE_NULL:    return str_copy(arena, s("null"));
 
 		default: return (String){};
 	}
@@ -104,10 +106,14 @@ static inline PQ_Value pq_value_equals(PQ_Value l, PQ_Value r)
 	{
 		return pq_value_boolean(str_equals(l.s, r.s));
 	}
-	else
+
+	// special handling for strings
+	if ((l.type == VALUE_STRING && r.type != VALUE_STRING) || (l.type != VALUE_STRING && r.type == VALUE_STRING))
 	{
-		return pq_value_boolean(pq_value_as_number(l) == pq_value_as_number(r));
+		return pq_value_boolean(false);
 	}
+
+	return pq_value_boolean(pq_value_as_number(l) == pq_value_as_number(r));
 }
 
 static inline PQ_Value pq_value_not(PQ_Value l)
@@ -194,6 +200,7 @@ static inline bool pq_inst_needs_arg(const PQ_InstructionType type)
 	TOKEN(IDENTIFIER,     "identifier") \
 	TOKEN(TRUE,           "`true`") \
 	TOKEN(FALSE,          "`false`") \
+	TOKEN(NULL,           "`null`") \
 	\
 	TOKEN(VAR,            "keyword `var`") \
 	TOKEN(FOREVER,        "keyword `forever`") \

@@ -12,7 +12,6 @@ for %%a in (%*) do set "%%a=true"
 
 set common_flags=-std=gnu2y ^
 	-Isrc ^
-	-ffast-math ^
 	-ferror-limit=1000 ^
 	-flto ^
 	-Wno-undefined-internal ^
@@ -55,7 +54,7 @@ if "%web%"=="true" (
 	if "%release%"=="true" ( set flags=!flags! -Oz ) else ( set flags=!flags! -g3 )
 
 	echo building web...
-	clang src/web/main.c -o bin/index.wasm !flags!
+	clang src/web/main.c -o bin/piqro.wasm !flags!
 
 	goto exit
 )
