@@ -11,10 +11,7 @@ typedef struct PQ_VM PQ_VM;
 typedef struct 
 {
 	uint16_t return_ip;
-
 	uint16_t stack_base;
-	uint16_t local_base;
-
 	uint16_t local_count;
 	uint16_t arg_count;
 } PQ_CallFrame;

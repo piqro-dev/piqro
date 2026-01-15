@@ -32,6 +32,23 @@ void sin_proc(PQ_VM* vm)
 	pq_return_value(vm, pq_value_number(__builtin_sinf(v)));
 }
 
+void test_proc(PQ_VM* vm)
+{
+	bool expr = pq_value_as_boolean(pq_get_local(vm, 0));
+	String name = pq_value_as_string(vm->arena, pq_get_local(vm, 1));
+
+	if (expr)
+	{
+		println("TEST: [SUCCESS] %.*s", s_fmt(name));
+	}
+	else
+	{
+		println("TEST: [FAILURE] %.*s", s_fmt(name));
+	}
+
+	pq_return(vm);
+}
+
 void dump_stack(PQ_VM* vm)
 {
 	println("Stack:");
@@ -42,7 +59,7 @@ void dump_stack(PQ_VM* vm)
 		{
 			String v = pq_value_as_string(vm->arena, vm->stack[i]);
 
-			println("   [%d] %.*s", i, s_fmt(v));
+			println("   [%d] %.*s, %s", i, s_fmt(v), pq_value_to_c_str(vm->stack[i].type));
 		}
 	}
 	else
@@ -68,10 +85,6 @@ void dump_all_instructions(PQ_Compiler* c, PQ_VM* vm)
 				println("  %-4d | %-20s %d", i, pq_inst_to_c_str(it.type), it.arg);
 			}
 		}
-		else
-		{
-			println("  %-4d | %-20s", i, pq_inst_to_c_str(it.type));
-		}
 	}
 }
 
@@ -96,10 +109,28 @@ void dump_instruction(PQ_Compiler* c, PQ_VM* vm)
 	}
 }
 
+void dump_state(PQ_VM* vm)
+{
+	println("\n===============================");
+	
+	println("\nVM info:");
+	println("local count: %d", vm->local_count);
+	println("stack size:  %d", vm->stack_size);
+	
+	println("\nVM locals:");
+
+	for (uint16_t i = 0; i < vm->local_count; i++)
+	{
+		String v = pq_value_as_string(vm->arena, vm->locals[i]);
+		println("   [%d] %.*s, %s", i, s_fmt(v), pq_value_to_c_str(vm->locals[i].type));
+	}
+}
+
 static constexpr const char source[] = 
 {
 	#embed "test_bed.pq" 
-	,'\0'
+	,
+	'\0'
 };
 
 static uint8_t mem[4 * 1024 * 1024];
@@ -115,6 +146,7 @@ int main()
 	
 		pq_declare_foreign_proc(&c, s("print"), 1);
 		pq_declare_foreign_proc(&c, s("sin"), 1);
+		pq_declare_foreign_proc(&c, s("test"), 2);
 	}
 
 	PQ_CompiledBlob b = pq_compile(&c);
@@ -124,13 +156,17 @@ int main()
 	
 	//dump_all_instructions(&c, &vm);
 
+	println("Compiled size: %d bytes", b.size);
+
 	pq_bind_foreign_proc(&vm, s("print"), print_proc);
 	pq_bind_foreign_proc(&vm, s("sin"), sin_proc);
+	pq_bind_foreign_proc(&vm, s("test"), test_proc);
 
 	bool r = true;
 
 	while (r)
 	{
+		//dump_state(&vm);
 		//dump_instruction(&c, &vm);
 
 		r = pq_execute(&vm); 

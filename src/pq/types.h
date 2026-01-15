@@ -16,9 +16,12 @@ typedef enum : uint8_t
 	VALUE_NUMBER,
 	VALUE_BOOLEAN,
 	VALUE_STRING,
+	VALUE_ARRAY,
 } PQ_ValueType;
 
-typedef struct 
+typedef struct PQ_Value PQ_Value;
+
+struct PQ_Value 
 {
 	PQ_ValueType type;
 
@@ -27,16 +30,38 @@ typedef struct
 		float n;
 		bool b; 
 		String s;
+		
+		struct 
+		{
+			struct PQ_Value* elements;
+			uint16_t count; // immutable
+		} a;
 	};
-} PQ_Value;
+};
 
-#define pq_value_null()     ((PQ_Value){ VALUE_NULL })
+#define pq_value_array(arena, N) ((PQ_Value){ VALUE_ARRAY, .a = { .elements = arena_push_array((arena), PQ_Value, (N)), .count = (N) } })
 
-#define pq_value_number(v)  ((PQ_Value){ VALUE_NUMBER, .n = (float)(v) })
+#define pq_value_null()          ((PQ_Value){ VALUE_NULL })
 
-#define pq_value_boolean(v) ((PQ_Value){ VALUE_BOOLEAN, .b = (bool)(v) })
+#define pq_value_number(v)       ((PQ_Value){ VALUE_NUMBER, .n = (float)(v) })
 
-#define pq_value_string(v)  ((PQ_Value){ VALUE_STRING, .s = v })
+#define pq_value_boolean(v)      ((PQ_Value){ VALUE_BOOLEAN, .b = (bool)(v) })
+
+#define pq_value_string(v)       ((PQ_Value){ VALUE_STRING, .s = v })
+
+static inline const char* pq_value_to_c_str(const PQ_ValueType type)
+{
+	switch (type) 
+	{
+		case VALUE_NULL:    return "null";
+		case VALUE_NUMBER:  return "number"; 
+		case VALUE_STRING:  return "string"; 
+		case VALUE_BOOLEAN: return "boolean";
+		case VALUE_ARRAY:   return "array"; 
+
+		default: return "unknown";
+	}
+}
 
 static inline float pq_value_as_number(const PQ_Value v)
 {
@@ -44,8 +69,9 @@ static inline float pq_value_as_number(const PQ_Value v)
 	{
 		case VALUE_NULL:    return __builtin_nanf("");
 		case VALUE_NUMBER:  return v.n;
-		case VALUE_BOOLEAN: return (float)v.b;
 		case VALUE_STRING:  return 0.0f;
+		case VALUE_BOOLEAN: return (float)v.b;
+		case VALUE_ARRAY:   return 0.0f;
 
 		default: return 0.0f;
 	}
@@ -59,6 +85,7 @@ static inline bool pq_value_as_boolean(const PQ_Value v)
 		case VALUE_NUMBER:  return (bool)v.n;
 		case VALUE_STRING:  return false;
 		case VALUE_BOOLEAN: return v.b;
+		case VALUE_ARRAY:   return false;
 
 		default: return false;
 	}
@@ -68,10 +95,11 @@ static inline String pq_value_as_string(Arena* arena, const PQ_Value v)
 {
 	switch (v.type) 
 	{
-		case VALUE_NUMBER:  return str_format(arena, "%f", v.n);
-		case VALUE_BOOLEAN: return str_format(arena, "%s", v.b ? "true" : "false");
-		case VALUE_STRING:  return str_copy_from_to(arena, v.s, 1, v.s.length - 1);
 		case VALUE_NULL:    return str_copy(arena, s("null"));
+		case VALUE_NUMBER:  return str_format(arena, "%f", v.n);
+		case VALUE_STRING:  return str_copy_from_to(arena, v.s, 1, v.s.length - 1);
+		case VALUE_BOOLEAN: return str_format(arena, "%s", v.b ? "true" : "false");
+		case VALUE_ARRAY:   return (String){};
 
 		default: return (String){};
 	}
@@ -130,12 +158,15 @@ static inline PQ_Value pq_value_not(PQ_Value l)
 
 #define DEFINE_INSTRUCTIONS \
 	INST(CALL) \
-	INST(LOAD_NULL) \
 	INST(LOAD_IMMEDIATE) \
 	INST(LOAD_LOCAL) \
 	INST(STORE_LOCAL) \
+	INST(LOAD_SUBSCRIPT) \
+	INST(STORE_SUBSCRIPT) \
+	INST(LOAD_ARRAY) \
 	INST(JUMP) \
 	INST(JUMP_COND) \
+	INST(LOAD_NULL) \
 	INST(ADD) \
 	INST(SUB) \
 	INST(DIV) \
@@ -238,6 +269,8 @@ static inline bool pq_inst_needs_arg(const PQ_InstructionType type)
 	TOKEN(CLOSE_BRACE,    "`}`") \
 	TOKEN(OPEN_PAREN,     "`(`") \
 	TOKEN(CLOSE_PAREN,    "`)`") \
+	TOKEN(OPEN_BOX,       "`[`") \
+	TOKEN(CLOSE_BOX,      "`]`") \
 	TOKEN(COMMA,          "`,`")
 
 #define TOKEN(name, fancy_name) TOKEN_##name,

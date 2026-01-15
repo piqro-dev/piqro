@@ -16,10 +16,11 @@ typedef struct
 typedef struct
 {
 	String name;
-
+	
 	uint8_t idx;
-	uint8_t local_count;
-	uint8_t arg_count;
+
+	uint16_t local_count;
+	uint16_t arg_count;
 
 	bool foreign;
 
@@ -29,17 +30,19 @@ typedef struct
 typedef struct
 {
 	uint16_t local;
-
 	PQ_Scope scope;
 } PQ_Loop;
 
 typedef struct 
 {
 	String name;
-
 	uint8_t idx;
 
-	PQ_Procedure* proc;
+	bool array;
+	uint16_t array_size;
+
+	bool arg;
+	bool top_level;
 } PQ_Variable;
 
 typedef void (*PQ_CompilerErrorFn)(uint16_t, const char*);

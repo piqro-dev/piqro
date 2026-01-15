@@ -369,6 +369,18 @@ static void tokenize(PQ_Compiler* c)
 				push_token(c, (PQ_Token){ TOKEN_OPEN_PAREN, c->line });
 			} break;
 
+			case ']':
+			{
+				eat_char(c);
+				push_token(c, (PQ_Token){ TOKEN_CLOSE_BOX, c->line });
+			} break;
+
+			case '[':
+			{
+				eat_char(c);
+				push_token(c, (PQ_Token){ TOKEN_OPEN_BOX, c->line });
+			} break;
+
 			case ')':
 			{
 				eat_char(c);
@@ -384,6 +396,12 @@ static void tokenize(PQ_Compiler* c)
 			case '\'':
 			{
 				push_token(c, parse_string(c));
+			} break;
+
+			// semicolons aren't mandatory, it's fine
+			case ';':
+			{
+				eat_char(c);
 			} break;
 
 			default:
@@ -424,7 +442,11 @@ static PQ_Token peek_token(PQ_Compiler* c, int16_t offset)
 
 static PQ_Token eat_token(PQ_Compiler* c)
 {
-	return c->tokens[c->idx++];
+	PQ_Token t = c->tokens[c->idx++];
+
+	c->line = t.line;
+
+	return t;
 }
 
 static PQ_Token try_eat_token(PQ_Compiler* c, PQ_TokenType expected)
@@ -504,12 +526,13 @@ static PQ_Variable* get_or_create_variable(PQ_Compiler* c, String name)
 
 	var->name = str_copy(c->arena, name); 
 	var->idx = c->variable_count - 1;
+	
+	var->arg = false;
+	var->array = false;
 
-	// if this isn't nullptr, this variable is an argument
-	if (c->current_proc)
+	if (!c->current_proc)
 	{
-		var->proc = c->current_proc;
-		var->idx = var->proc->arg_count;
+		var->top_level = true;
 	}
 
 	return var;
@@ -565,7 +588,9 @@ static void emit_identifier_expression(PQ_Compiler* c)
 		C_ERROR("Undefined identifier '%.*s'", s_fmt(name));
 	}
 
-	push_inst(c, (PQ_Instruction){ INST_LOAD_LOCAL, get_or_create_variable(c, name)->idx });
+	PQ_Variable* var = get_or_create_variable(c, name);
+
+	push_inst(c, (PQ_Instruction){ INST_LOAD_LOCAL, var->idx });
 }
 
 static void emit_boolean_expression(PQ_Compiler* c)
@@ -656,14 +681,17 @@ static void emit_assign_expression(PQ_Compiler* c)
 		C_ERROR("Undefined identifier '%.*s'", s_fmt(name));
 	}
 
+	PQ_Variable* var = get_or_create_variable(c, name);
+
 	// =...
 	PQ_Token assign = eat_token(c);
 
+	// when we are just assigning, we don't operate on the identifier
 	if (assign.type != TOKEN_EQUALS)
 	{
-		push_inst(c, (PQ_Instruction){ INST_LOAD_LOCAL, get_or_create_variable(c, name)->idx });
+		push_inst(c, (PQ_Instruction){ INST_LOAD_LOCAL, var->idx });
 	}
-	
+
 	emit_expression(c);
 
 	switch (assign.type)
@@ -678,9 +706,8 @@ static void emit_assign_expression(PQ_Compiler* c)
 
 		default: C_ERROR("Unexpected %s", pq_token_to_c_str(assign.type)); break;
 	}
-	
-	push_inst(c, (PQ_Instruction){ INST_STORE_LOCAL, get_or_create_variable(c, name)->idx });
-	push_inst(c, (PQ_Instruction){ INST_LOAD_LOCAL, get_or_create_variable(c, name)->idx });
+
+	push_inst(c, (PQ_Instruction){ INST_STORE_LOCAL, var->idx });
 }
 
 // <expr> <op> <expr>
@@ -741,6 +768,91 @@ static void emit_string_expression(PQ_Compiler* c)
 	push_inst(c, (PQ_Instruction){ INST_LOAD_IMMEDIATE, get_or_create_immediate(c, imm) });
 }
 
+// <ident>[<expr>] 
+// OR
+// <ident>[<expr>] = <expr>
+static void emit_array_element_expression(PQ_Compiler* c)
+{
+	uint16_t start_pos = c->idx;
+	
+	// <ident>
+	PQ_Token ident = eat_token(c);
+
+	String name = str_copy_from_to(c->arena, c->source, ident.start, ident.end);
+
+	if (!variable_exists(c, name))
+	{
+		C_ERROR("Undefined identifier '%.*s'", s_fmt(name));
+	}
+
+	PQ_Variable* var = get_or_create_variable(c, name);
+
+	if (!var->array && !var->arg)
+	{
+		C_ERROR("Tried indexing non-array identifier '%.*s'", s_fmt(name));
+	}
+
+	uint16_t start = c->instruction_count;
+	
+	// [
+	eat_token(c);
+
+	// <expr>
+	emit_expression(c);
+	
+	// ]
+	try_eat_token(c, TOKEN_CLOSE_BOX);
+
+	push_inst(c, (PQ_Instruction){ INST_LOAD_SUBSCRIPT, var->idx });	
+
+	// ..=..
+	if (pq_token_is_assign_op(peek_token(c, 0).type))
+	{
+		PQ_Token assign = eat_token(c);
+
+		// when we are just assigning, we don't operate on the identifier
+		if (assign.type == TOKEN_EQUALS)
+		{
+			// pop the array element off
+			c->instruction_count = start;
+		}
+
+		emit_expression(c);
+
+		switch (assign.type)
+		{
+			case TOKEN_EQUALS: break;
+	
+			case TOKEN_PLUS_EQUALS:    push_inst(c, (PQ_Instruction){ INST_ADD }); break;
+			case TOKEN_DASH_EQUALS:    push_inst(c, (PQ_Instruction){ INST_SUB }); break;
+			case TOKEN_SLASH_EQUALS:   push_inst(c, (PQ_Instruction){ INST_DIV }); break;
+			case TOKEN_STAR_EQUALS:    push_inst(c, (PQ_Instruction){ INST_MUL }); break;
+			case TOKEN_PERCENT_EQUALS: push_inst(c, (PQ_Instruction){ INST_MOD }); break;
+	
+			default: C_ERROR("Unexpected %s", pq_token_to_c_str(assign.type)); break;
+		}
+
+		uint16_t current_pos = c->idx;
+
+		// jump back to the start and read out the subscript
+		c->idx = start_pos + 1; // skip identifier
+
+		// [
+		eat_token(c);
+
+		// <expr>
+		emit_expression(c);
+
+		// ]
+		eat_token(c);
+
+		// ...go back where we left off
+		c->idx = current_pos;
+
+		push_inst(c, (PQ_Instruction){ INST_STORE_SUBSCRIPT, var->idx });
+	}
+}
+
 static void emit_expression(PQ_Compiler* c)
 {
 	PQ_Token expr = peek_token(c, 0);
@@ -778,7 +890,11 @@ static void emit_expression(PQ_Compiler* c)
 
 		case TOKEN_IDENTIFIER:
 		{
-			if (peek_token(c, 1).type == TOKEN_OPEN_PAREN)
+			if (peek_token(c, 1).type == TOKEN_OPEN_BOX)
+			{
+				emit_array_element_expression(c);
+			}
+			else if (peek_token(c, 1).type == TOKEN_OPEN_PAREN)
 			{
 				emit_procedure_expression(c);
 			}
@@ -854,7 +970,11 @@ static void emit_scope(PQ_Compiler* c)
 // statements
 //
 
-// var <ident> OR var <ident> = <expr>
+// var <ident> 
+// OR 
+// var <ident> = <expr>
+// OR
+// var <ident>[N]
 static void emit_var_statement(PQ_Compiler* c)
 {
 	// var
@@ -865,31 +985,79 @@ static void emit_var_statement(PQ_Compiler* c)
 
 	String name = str_copy_from_to(c->arena, c->source, ident.start, ident.end);
 
-	if (variable_exists(c, name) || procedure_exists(c, name)) 
+	if ((variable_exists(c, name) || procedure_exists(c, name))) 
 	{
 		C_ERROR("Identifier '%.*s' redefined", s_fmt(name));
 	}
+
+	PQ_Variable* var = get_or_create_variable(c, name);
 
 	if (c->current_proc && c->current_scope == &c->current_proc->scope) 
 	{
 		c->current_proc->local_count++;
 	}
 
+	// [
+	if (peek_token(c, 0).type == TOKEN_OPEN_BOX)
+	{
+		eat_token(c);
+
+		var->array = true;
+
+		// N
+		if (peek_token(c, 0).type == TOKEN_CLOSE_BOX)
+		{
+			var->array_size = (uint16_t)-1;
+			C_ERROR("Unknown sized array declaration is not allowed");
+		}
+		else if (peek_token(c, 0).type != TOKEN_NUMBER)
+		{
+			C_ERROR("Expected number literal as array size, got %s", pq_token_to_c_str(peek_token(c, 0).type));
+		}
+		else
+		{
+			PQ_Token number = eat_token(c);
+	
+			int32_t N = (int32_t)str_as_number(str_copy_from_to(c->arena, c->source, number.start, number.end));
+			
+			if (N <= 0)
+			{
+				C_ERROR("Array size cannot be negative or zero");
+			}
+	
+			var->array_size = (uint16_t)N;
+		}
+
+		// ]
+		try_eat_token(c, TOKEN_CLOSE_BOX);
+	}
+
 	// =
 	if (peek_token(c, 0).type == TOKEN_EQUALS)
 	{
+		if (var->array)
+		{
+			C_ERROR("Explicit array initialization is not allowed");
+		}
+
 		eat_token(c);
-		
-		// <expr>
+
 		emit_expression(c);
 	}
-	// declaration, initialize with null
+	// declaration
 	else
 	{
-		push_inst(c, (PQ_Instruction){ INST_LOAD_NULL });
+		if (var->array)
+		{
+			push_inst(c, (PQ_Instruction){ INST_LOAD_ARRAY, var->array_size });
+		}
+		else
+		{
+			push_inst(c, (PQ_Instruction){ INST_LOAD_NULL });
+		}
 	}
 
-	push_inst(c, (PQ_Instruction){ INST_STORE_LOCAL, get_or_create_variable(c, name)->idx });
+	push_inst(c, (PQ_Instruction){ INST_STORE_LOCAL, var->idx });
 }
 
 // define <ident>(<ident>, <ident>...) { ... }
@@ -897,11 +1065,6 @@ static void emit_define_statement(PQ_Compiler* c)
 {
 	// define
 	eat_token(c);
-
-	if (c->current_proc)
-	{
-		C_ERROR("Cannot define procedure inside another one");
-	}
 
 	// <ident>
 	PQ_Token ident = try_eat_token(c, TOKEN_IDENTIFIER);
@@ -911,6 +1074,11 @@ static void emit_define_statement(PQ_Compiler* c)
 	if (variable_exists(c, name) || procedure_exists(c, name)) 
 	{
 		C_ERROR("Identifier '%.*s' redefined", s_fmt(name));
+	}
+
+	if (c->current_proc)
+	{
+		C_ERROR("Cannot define procedure inside another one");
 	}
 
 	PQ_Procedure* proc = get_or_create_procedure(c, name);
@@ -939,9 +1107,10 @@ static void emit_define_statement(PQ_Compiler* c)
 			C_ERROR("Argument/variable redefinition in procedure definition");
 		}
 
-		get_or_create_variable(c, name);
+		PQ_Variable* var = get_or_create_variable(c, name);
 
-		proc->arg_count++;
+		var->idx = proc->arg_count++;
+		var->arg = true;
 
 		if (peek_token(c, 0).type != TOKEN_CLOSE_PAREN)
 		{
@@ -966,7 +1135,7 @@ static void emit_define_statement(PQ_Compiler* c)
 	begin_scope(c, &proc->scope);
 
 	// move the local index back to the first argument
-	proc->scope.local_base = c->variable_count - proc->arg_count;
+	proc->scope.local_base -= proc->arg_count;
 
 	// { ... }
 	while (peek_token(c, 0).type != TOKEN_CLOSE_BRACE)
@@ -1077,7 +1246,7 @@ static void emit_repeat_statement(PQ_Compiler* c)
 
 	end_scope(c, &loop.scope);
 
-	push_inst(c, (PQ_Instruction){ INST_JUMP, (uint16_t)(loop.scope.first_inst + 2) });
+	push_inst(c, (PQ_Instruction){ INST_JUMP, loop.scope.first_inst + 1 });
 
 	jump_cond->arg = loop.scope.last_inst + 1; // last statement + the jump
 
@@ -1367,7 +1536,6 @@ static void emit_statement(PQ_Compiler* c)
 {
 	switch (peek_token(c, 0).type)
 	{
-		// var <ident> = <expr>
 		case TOKEN_VAR:
 		{
 			emit_var_statement(c);
@@ -1375,16 +1543,17 @@ static void emit_statement(PQ_Compiler* c)
 
 		case TOKEN_IDENTIFIER:
 		{
-			// <ident>(...)
 			if (peek_token(c, 1).type == TOKEN_OPEN_PAREN)
 			{
 				emit_procedure_expression(c);
 			}
-			// <ident> = <expr>
+			else if (peek_token(c, 1).type == TOKEN_OPEN_BOX)
+			{
+				emit_array_element_expression(c);
+			}
 			else if (pq_token_is_assign_op(peek_token(c, 1).type))			
 			{
 				emit_assign_expression(c);
-				c->instruction_count--; // pop the LOAD_IMMEDIATE if this is a statement.
 			}
 			else
 			{
@@ -1392,19 +1561,16 @@ static void emit_statement(PQ_Compiler* c)
 			}
 		} break;
 
-		// foreign define <ident>(...)
 		case TOKEN_FOREIGN:
 		{
 			emit_foreign_define_statement(c);
 		} break;
 
-		// define <ident>(...) { ... }
 		case TOKEN_DEFINE:
 		{
 			emit_define_statement(c);
 		} break;
 
-		// return <expr>
 		case TOKEN_RETURN:
 		{
 			emit_return_statement(c);
@@ -1412,37 +1578,31 @@ static void emit_statement(PQ_Compiler* c)
 
 		case TOKEN_REPEAT:
 		{
-			// repeat until <expr> { ... }
 			if (peek_token(c, 1).type == TOKEN_UNTIL)
 			{
 				emit_repeat_until_statement(c);
 			}
-			// repeat <expr> { ... }
 			else
 			{
 				emit_repeat_statement(c);
 			}
 		} break;
 
-		// forever { ... }
 		case TOKEN_FOREVER:
 		{
 			emit_forever_statement(c);
 		} break;
 
-		// break
 		case TOKEN_BREAK:
 		{
 			emit_break_statement(c);
 		} break;
 
-		// if <expr> { ... } else if <expr> { ... } else { ... }
 		case TOKEN_IF:
 		{
 			emit_if_statement(c);
 		} break;
 
-		// { ... }
 		case TOKEN_OPEN_BRACE:
 		{
 			emit_scope(c);
@@ -1560,6 +1720,8 @@ static void write_immediates(PQ_Compiler* c, PQ_CompiledBlob* b)
 
 				write_to_blob(&n, b, sizeof(char));
 			} break;
+
+			default: __builtin_unreachable(); break;
 		}
 	}
 }
@@ -1591,6 +1753,21 @@ static void write_procedures(PQ_Compiler* c, PQ_CompiledBlob* b)
 	}
 }
 
+static void write_top_level_count(PQ_Compiler* c, PQ_CompiledBlob* b)
+{
+	uint16_t count = 0;
+
+	for (uint16_t i = 0; i < c->variable_count; i++)
+	{
+		if (c->variables[i].top_level)
+		{
+			count++;
+		}
+	}
+
+	write_to_blob(&count, b, sizeof(uint16_t));
+}
+
 static void write_instructions(PQ_Compiler* c, PQ_CompiledBlob* b)
 {
 	write_to_blob(&c->instruction_count, b, sizeof(uint16_t));
@@ -1613,6 +1790,7 @@ static void write_blob(PQ_Compiler* c, PQ_CompiledBlob* b)
 	write_magic(c, b);
 	write_immediates(c, b);
 	write_procedures(c, b);
+	write_top_level_count(c, b);
 	write_instructions(c, b);
 }
 
