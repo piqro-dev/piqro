@@ -42,7 +42,7 @@ typedef struct
 	uint16_t array_size;
 
 	bool arg;
-	bool top_level;
+	bool global;
 } PQ_Variable;
 
 typedef void (*PQ_CompilerErrorFn)(uint16_t, const char*);

@@ -529,10 +529,11 @@ static PQ_Variable* get_or_create_variable(PQ_Compiler* c, String name)
 	
 	var->arg = false;
 	var->array = false;
+	var->global = false;
 
-	if (!c->current_proc)
+	if (!c->current_proc && !c->current_scope)
 	{
-		var->top_level = true;
+		var->global = true;
 	}
 
 	return var;
@@ -590,7 +591,7 @@ static void emit_identifier_expression(PQ_Compiler* c)
 
 	PQ_Variable* var = get_or_create_variable(c, name);
 
-	push_inst(c, (PQ_Instruction){ INST_LOAD_LOCAL, var->idx });
+	push_inst(c, (PQ_Instruction){ var->global ? INST_LOAD_GLOBAL : INST_LOAD_LOCAL, var->idx });
 }
 
 static void emit_boolean_expression(PQ_Compiler* c)
@@ -689,7 +690,7 @@ static void emit_assign_expression(PQ_Compiler* c)
 	// when we are just assigning, we don't operate on the identifier
 	if (assign.type != TOKEN_EQUALS)
 	{
-		push_inst(c, (PQ_Instruction){ INST_LOAD_LOCAL, var->idx });
+		push_inst(c, (PQ_Instruction){ var->global ? INST_LOAD_GLOBAL : INST_LOAD_LOCAL, var->idx });
 	}
 
 	emit_expression(c);
@@ -707,7 +708,7 @@ static void emit_assign_expression(PQ_Compiler* c)
 		default: C_ERROR("Unexpected %s", pq_token_to_c_str(assign.type)); break;
 	}
 
-	push_inst(c, (PQ_Instruction){ INST_STORE_LOCAL, var->idx });
+	push_inst(c, (PQ_Instruction){ var->global ? INST_STORE_GLOBAL : INST_STORE_LOCAL, var->idx });
 }
 
 // <expr> <op> <expr>
@@ -740,7 +741,7 @@ static void emit_binary_expression(PQ_Compiler* c, int8_t min_precedence)
 		case TOKEN_LESS_THAN:     push_inst(c, (PQ_Instruction){ INST_LESS_THAN }); break; 
 		case TOKEN_GREATER_THAN:  push_inst(c, (PQ_Instruction){ INST_GREATER_THAN }); break; 
 		
-		case TOKEN_DOUBLE_EQUALS: push_inst(c, (PQ_Instruction){ INST_EQUALS }); break; 
+		case TOKEN_DOUBLE_EQUALS: push_inst(c, (PQ_Instruction){ INST_EQUALS }); break;
 		case TOKEN_NOT_EQUALS:    push_inst(c, (PQ_Instruction){ INST_EQUALS }); push_inst(c, (PQ_Instruction){ INST_NOT }); break; 
 		
 		case TOKEN_DOUBLE_AND:    push_inst(c, (PQ_Instruction){ INST_AND }); break; 
@@ -803,7 +804,7 @@ static void emit_array_element_expression(PQ_Compiler* c)
 	// ]
 	try_eat_token(c, TOKEN_CLOSE_BOX);
 
-	push_inst(c, (PQ_Instruction){ INST_LOAD_SUBSCRIPT, var->idx });	
+	push_inst(c, (PQ_Instruction){ var->global ? INST_LOAD_GLOBAL_SUBSCRIPT : INST_LOAD_LOCAL_SUBSCRIPT, var->idx });	
 
 	// ..=..
 	if (pq_token_is_assign_op(peek_token(c, 0).type))
@@ -849,7 +850,7 @@ static void emit_array_element_expression(PQ_Compiler* c)
 		// ...go back where we left off
 		c->idx = current_pos;
 
-		push_inst(c, (PQ_Instruction){ INST_STORE_SUBSCRIPT, var->idx });
+		push_inst(c, (PQ_Instruction){ var->global ? INST_STORE_GLOBAL_SUBSCRIPT : INST_STORE_LOCAL_SUBSCRIPT, var->idx });
 	}
 }
 
@@ -974,7 +975,7 @@ static void emit_scope(PQ_Compiler* c)
 // OR 
 // var <ident> = <expr>
 // OR
-// var <ident>[N]
+// var <ident>[N] | var <ident>[] = { ... } | var <ident>[N] = { ... }
 static void emit_var_statement(PQ_Compiler* c)
 {
 	// var
@@ -992,9 +993,10 @@ static void emit_var_statement(PQ_Compiler* c)
 
 	PQ_Variable* var = get_or_create_variable(c, name);
 
+	// variables local to procedures get their index redefined
 	if (c->current_proc && c->current_scope == &c->current_proc->scope) 
 	{
-		c->current_proc->local_count++;
+		var->idx = c->current_proc->arg_count + c->current_proc->local_count++;
 	}
 
 	// [
@@ -1004,12 +1006,12 @@ static void emit_var_statement(PQ_Compiler* c)
 
 		var->array = true;
 
-		// N
+		// unknown size
 		if (peek_token(c, 0).type == TOKEN_CLOSE_BOX)
 		{
 			var->array_size = (uint16_t)-1;
-			C_ERROR("Unknown sized array declaration is not allowed");
 		}
+		// not a number
 		else if (peek_token(c, 0).type != TOKEN_NUMBER)
 		{
 			C_ERROR("Expected number literal as array size, got %s", pq_token_to_c_str(peek_token(c, 0).type));
@@ -1022,7 +1024,7 @@ static void emit_var_statement(PQ_Compiler* c)
 			
 			if (N <= 0)
 			{
-				C_ERROR("Array size cannot be negative or zero");
+				C_ERROR("Size of array '%.*s' cannot be negative or zero", s_fmt(var->name));
 			}
 	
 			var->array_size = (uint16_t)N;
@@ -1035,29 +1037,96 @@ static void emit_var_statement(PQ_Compiler* c)
 	// =
 	if (peek_token(c, 0).type == TOKEN_EQUALS)
 	{
-		if (var->array)
-		{
-			C_ERROR("Explicit array initialization is not allowed");
-		}
-
 		eat_token(c);
 
-		emit_expression(c);
+		// initializer list
+		if (var->array)
+		{
+			PQ_Instruction* load_array = push_inst(c, (PQ_Instruction){ INST_LOAD_ARRAY });
+			push_inst(c, (PQ_Instruction){ var->global ? INST_STORE_GLOBAL : INST_STORE_LOCAL, var->idx });
+
+			uint16_t size = 0;
+
+			// {
+			try_eat_token(c, TOKEN_OPEN_BRACE);
+
+
+			// ...
+			while (peek_token(c, 0).type != TOKEN_CLOSE_BRACE)
+			{
+				// check for { ,<expr>
+				if (peek_token(c, -1).type == TOKEN_OPEN_BRACE && peek_token(c, 0).type == TOKEN_COMMA)
+				{
+					C_ERROR("Expected expression after `{` in initializer list, got `,`");
+				}
+
+				push_inst(c, (PQ_Instruction){ INST_LOAD_IMMEDIATE, get_or_create_immediate(c, pq_value_number(size++)) });
+				
+				// <expr>
+				emit_expression(c);
+
+				push_inst(c, (PQ_Instruction){ var->global ? INST_STORE_GLOBAL_SUBSCRIPT : INST_STORE_LOCAL_SUBSCRIPT, var->idx });
+
+				if (peek_token(c, 0).type != TOKEN_CLOSE_BRACE)
+				{
+					// ,
+					try_eat_token(c, TOKEN_COMMA);
+				
+					// check for <expr>, }
+					if (peek_token(c, 0).type == TOKEN_CLOSE_BRACE)
+					{
+						C_ERROR("Expected expression after `,` in initializer list, got `}`");
+					}
+				}
+			}
+
+			// }
+			try_eat_token(c, TOKEN_CLOSE_BRACE);
+
+			if (var->array_size == (uint16_t)-1)
+			{
+				if (size == 0)
+				{
+					C_ERROR("Initializer list of unknown sized array cannot be empty");
+				}
+
+				var->array_size = size;
+			}
+			else if (size > var->array_size)
+			{
+				C_ERROR("Initializer list of array is bigger than it's size")
+			}
+
+			load_array->arg = var->array_size;
+		}
+		else
+		{
+			emit_expression(c);
+
+			push_inst(c, (PQ_Instruction){ var->global ? INST_STORE_GLOBAL : INST_STORE_LOCAL, var->idx });
+		}
 	}
 	// declaration
 	else
 	{
+		// array
 		if (var->array)
 		{
+			if (var->array_size == (uint16_t)-1)
+			{
+				C_ERROR("Declaration of unknown sized array is not allowed");
+			}
+
 			push_inst(c, (PQ_Instruction){ INST_LOAD_ARRAY, var->array_size });
+			push_inst(c, (PQ_Instruction){ var->global ? INST_STORE_GLOBAL : INST_STORE_LOCAL, var->idx });
 		}
+		// simple variable
 		else
 		{
 			push_inst(c, (PQ_Instruction){ INST_LOAD_NULL });
+			push_inst(c, (PQ_Instruction){ var->global ? INST_STORE_GLOBAL : INST_STORE_LOCAL, var->idx });
 		}
 	}
-
-	push_inst(c, (PQ_Instruction){ INST_STORE_LOCAL, var->idx });
 }
 
 // define <ident>(<ident>, <ident>...) { ... }
@@ -1117,7 +1186,7 @@ static void emit_define_statement(PQ_Compiler* c)
 			// ,
 			try_eat_token(c, TOKEN_COMMA);
 		
-			// Check for <ident>,)
+			// check for <ident>,)
 			if (peek_token(c, 0).type == TOKEN_CLOSE_PAREN)
 			{
 				C_ERROR("Expected argument after `,` in procedure definition, got `)`");
@@ -1753,13 +1822,13 @@ static void write_procedures(PQ_Compiler* c, PQ_CompiledBlob* b)
 	}
 }
 
-static void write_top_level_count(PQ_Compiler* c, PQ_CompiledBlob* b)
+static void write_global_count(PQ_Compiler* c, PQ_CompiledBlob* b)
 {
 	uint16_t count = 0;
 
 	for (uint16_t i = 0; i < c->variable_count; i++)
 	{
-		if (c->variables[i].top_level)
+		if (c->variables[i].global)
 		{
 			count++;
 		}
@@ -1790,7 +1859,7 @@ static void write_blob(PQ_Compiler* c, PQ_CompiledBlob* b)
 	write_magic(c, b);
 	write_immediates(c, b);
 	write_procedures(c, b);
-	write_top_level_count(c, b);
+	write_global_count(c, b);
 	write_instructions(c, b);
 }
 

@@ -105,6 +105,18 @@ static inline String pq_value_as_string(Arena* arena, const PQ_Value v)
 	}
 }
 
+static inline bool pq_value_can_be_number(PQ_Value l)
+{
+	switch (l.type)
+	{
+		case VALUE_BOOLEAN: return true;
+		case VALUE_NULL:    return true;
+		case VALUE_NUMBER:  return true;
+
+		default: return false;
+	}
+}
+
 #define DEFINE_VALUE_OPERATIONS \
 	OP(add, number, number, +) \
 	OP(sub, number, number, -) \
@@ -135,13 +147,17 @@ static inline PQ_Value pq_value_equals(PQ_Value l, PQ_Value r)
 		return pq_value_boolean(str_equals(l.s, r.s));
 	}
 
-	// special handling for strings
 	if ((l.type == VALUE_STRING && r.type != VALUE_STRING) || (l.type != VALUE_STRING && r.type == VALUE_STRING))
 	{
 		return pq_value_boolean(false);
 	}
 
-	return pq_value_boolean(pq_value_as_number(l) == pq_value_as_number(r));
+	if (pq_value_can_be_number(l) && pq_value_can_be_number(r))
+	{
+		return pq_value_boolean(pq_value_as_number(l) == pq_value_as_number(r));
+	}
+
+	return pq_value_boolean(false);
 }
 
 static inline PQ_Value pq_value_not(PQ_Value l)
@@ -161,8 +177,12 @@ static inline PQ_Value pq_value_not(PQ_Value l)
 	INST(LOAD_IMMEDIATE) \
 	INST(LOAD_LOCAL) \
 	INST(STORE_LOCAL) \
-	INST(LOAD_SUBSCRIPT) \
-	INST(STORE_SUBSCRIPT) \
+	INST(LOAD_GLOBAL) \
+	INST(STORE_GLOBAL) \
+	INST(LOAD_LOCAL_SUBSCRIPT) \
+	INST(STORE_LOCAL_SUBSCRIPT) \
+	INST(LOAD_GLOBAL_SUBSCRIPT) \
+	INST(STORE_GLOBAL_SUBSCRIPT) \
 	INST(LOAD_ARRAY) \
 	INST(JUMP) \
 	INST(JUMP_COND) \

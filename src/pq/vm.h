@@ -56,6 +56,9 @@ struct PQ_VM
 	PQ_Value* locals;
 	uint8_t local_count;
 
+	PQ_Value* globals;
+	uint8_t global_count;
+
 	bool halt;
 
 	uint16_t ip;

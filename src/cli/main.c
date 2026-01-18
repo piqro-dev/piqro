@@ -68,6 +68,24 @@ void dump_stack(PQ_VM* vm)
 	}
 }
 
+void dump_procedures(PQ_Compiler* c)
+{
+	println("Procedures:");
+
+	for (uint16_t i = 0; i < c->procedure_count; i++)
+	{
+		PQ_Procedure p = c->procedures[i];
+
+		println("  name: %.*s", s_fmt(p.name));
+		println("  idx: %d", p.idx);
+		println("  local_count: %d", p.local_count);
+		println("  arg_count: %d", p.arg_count);
+		println("  foreign: %s", p.foreign ? "true" : "false");
+	
+		println("");
+	}
+}
+
 void dump_all_instructions(PQ_Compiler* c, PQ_VM* vm)
 {
 	for (uint16_t i = 0; i < vm->instruction_count; i++)
@@ -78,11 +96,11 @@ void dump_all_instructions(PQ_Compiler* c, PQ_VM* vm)
 		{
 			if (it.type == INST_CALL)
 			{
-				println("  %-4d | %-20s %d (%.*s)", i, pq_inst_to_c_str(it.type), it.arg, s_fmt(c->procedures[it.arg].name));
+				println("  %-4d | %-25s %d (%.*s)", i, pq_inst_to_c_str(it.type), it.arg, s_fmt(c->procedures[it.arg].name));
 			}
 			else
 			{
-				println("  %-4d | %-20s %d", i, pq_inst_to_c_str(it.type), it.arg);
+				println("  %-4d | %-25s %d", i, pq_inst_to_c_str(it.type), it.arg);
 			}
 		}
 	}
@@ -96,23 +114,34 @@ void dump_instruction(PQ_Compiler* c, PQ_VM* vm)
 	{
 		if (it.type == INST_CALL)
 		{
-			println("\n-> %d | %-20s %d (%.*s)", vm->ip, pq_inst_to_c_str(it.type), it.arg, s_fmt(c->procedures[it.arg].name));
+			println("\n-> %d | %-25s %d (%.*s)", vm->ip, pq_inst_to_c_str(it.type), it.arg, s_fmt(c->procedures[it.arg].name));
 		}
 		else
 		{
-			println("\n-> %d | %-20s %d", vm->ip, pq_inst_to_c_str(it.type), it.arg);
+			println("\n-> %d | %-25s %d", vm->ip, pq_inst_to_c_str(it.type), it.arg);
 		}
 	}
 	else
 	{
-		println("\n-> %d | %-20s", vm->ip, pq_inst_to_c_str(it.type));
+		println("\n-> %d | %-25s", vm->ip, pq_inst_to_c_str(it.type));
 	}
 }
 
-void dump_state(PQ_VM* vm)
+void dump_global_count(PQ_Compiler* c)
 {
-	println("\n===============================");
-	
+	uint16_t count = 0;
+
+	for (uint16_t i = 0; i < c->variable_count; i++)
+	{
+		count++;
+	}
+
+	println("global count: %d", count);
+	println("");
+}
+
+void dump_state(PQ_VM* vm)
+{	
 	println("\nVM info:");
 	println("local count: %d", vm->local_count);
 	println("stack size:  %d", vm->stack_size);
@@ -154,7 +183,9 @@ int main()
 	PQ_VM vm = {};
 	pq_init_vm(&vm, &arena, &b, vm_error_fn);
 	
-	//dump_all_instructions(&c, &vm);
+	dump_procedures(&c);
+	dump_global_count(&c);
+	dump_all_instructions(&c, &vm);
 
 	println("Compiled size: %d bytes", b.size);
 
@@ -166,11 +197,13 @@ int main()
 
 	while (r)
 	{
-		//dump_state(&vm);
+		//println("\n===============================");
+
 		//dump_instruction(&c, &vm);
 
 		r = pq_execute(&vm); 
-
+		
+		//dump_state(&vm);
 		//dump_stack(&vm);
 	}
 }

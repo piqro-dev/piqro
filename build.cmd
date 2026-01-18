@@ -10,7 +10,7 @@ if %errorlevel%==1 (
 
 for %%a in (%*) do set "%%a=true"
 
-set common_flags=-std=gnu2y ^
+set common_flags=-std=c23 ^
 	-Isrc ^
 	-ferror-limit=1000 ^
 	-flto ^
@@ -49,9 +49,7 @@ if "%cli%"=="true" (
 )
 
 if "%web%"=="true" (
-	set flags=%web_flags%
-
-	if "%release%"=="true" ( set flags=!flags! -Oz ) else ( set flags=!flags! -g3 )
+	set flags=%web_flags% -Oz 
 
 	echo building web...
 	clang src/web/main.c -o bin/piqro.wasm !flags!

@@ -1,10 +1,24 @@
-//////////////////////////////////////////
+define check_array(array, n)
+{
+	var s = true
+
+	var i = 0 repeat until i == n
+	{
+		s = s && array[i] == i; 
+		
+		i += 1
+	}
+
+	return s
+}
+
+// ================================== //
 
 var a = 10
 
 test(a == 10, 'top level assignment')
 
-//////////////////////////////////////////
+// ================================== //
 
 var b = 0
 
@@ -15,7 +29,7 @@ repeat 5
 
 test(b == 5, 'top level repeat')
 
-//////////////////////////////////////////
+// ================================== //
 
 var success = true
 var c[10]
@@ -28,17 +42,9 @@ repeat 10
 	i += 1
 }
 
-i = 0
+test(check_array(c, 10), 'top level array assignment by top level repeat loop')
 
-repeat 10
-{
-	success = success && c[i] == i
-	i += 1 
-}
-
-test(success, 'top level array assignment by top level repeat loop')
-
-//////////////////////////////////////
+// ================================== //
 
 define do_math(n) 
 {
@@ -49,7 +55,7 @@ var d = do_math(50)
 
 test(d == 100, 'top level assignment by procedure')
 
-//////////////////////////////////////
+// ================================== //
 
 define factorial(n)
 {
@@ -63,29 +69,16 @@ define factorial(n)
 
 var e = factorial(5)
 
-test(e == 120, 'recursive factorial procedure')
+test(e == 120, 'top level assignment by recursive procedure')
 
-////////////////////////////////////
+// ================================== //
 
-define check_array(ac, n)
-{
-	var s = true
+var another_array[10] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 }
 
-	var ii = 0; repeat n 
-	{
-		s = s && ac[ii] == ii
-		ii += 1
-	}
+test(check_array(another_array, 10), 'top level array with initializer list check using procedure')
 
-	return s
-}
+// ================================== //
 
-var aaa[10]
+var unknown_array[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 }
 
-var ii = 0; repeat 10
-{
-	aaa[ii] = ii
-	ii += 1
-}
-
-test(check_array(aaa, 10), 'top level array check using procedure')
+test(check_array(unknown_array, 10), 'top level unknown size array with initializer list check using procedure')
