@@ -180,12 +180,12 @@ static void CALL(PQ_VM* vm, uint16_t idx)
 		VM_ERROR("Callee index out of bounds");
 	}
 
+	PQ_ProcedureInfo pi = vm->proc_infos[idx];
+
 	if (vm->call_frame_count >= PQ_MAX_CALL_FRAMES)
 	{
 		VM_ERROR("Call frame overflow");
 	}
-	
-	PQ_ProcedureInfo pi = vm->proc_infos[idx];
 
 	PQ_CallFrame* cf = &vm->call_frames[vm->call_frame_count++];
 
@@ -202,6 +202,11 @@ static void CALL(PQ_VM* vm, uint16_t idx)
 		vm->locals[(vm->local_count + cf->arg_count - 1) - i] = vm->stack[--vm->stack_size];
 	}
 
+	if (vm->local_count >= PQ_MAX_LOCALS)
+	{
+		VM_ERROR("Local overflow");
+	}
+
 	vm->local_count += cf->arg_count + cf->local_count;
 
 	cf->stack_base = vm->stack_size;
@@ -211,6 +216,11 @@ static void CALL(PQ_VM* vm, uint16_t idx)
 		// push locals found in procedure
 		for (uint8_t i = cf->arg_count; i < cf->local_count; i++) 
 		{
+			if (vm->local_count >= PQ_MAX_LOCALS)
+			{
+				VM_ERROR("Local overflow");
+			}
+
 			vm->locals[vm->local_count++] = pq_value_null();
 		}
 		
@@ -234,7 +244,7 @@ static void CALL(PQ_VM* vm, uint16_t idx)
 
 		PQ_Value ret = vm->stack[--vm->stack_size];
 
-		if (vm->call_frame_count == 0)
+		if (vm->call_frame_count <= 0)
 		{
 			VM_ERROR("Call frame underflow");
 		}
@@ -348,14 +358,14 @@ static void LOAD_LOCAL_SUBSCRIPT(PQ_VM* vm, uint16_t idx)
 
 	PQ_Value idx_v = vm->stack[--vm->stack_size];
 
-	if (idx_v.type != VALUE_NUMBER)
+	if (!pq_value_can_be_number(idx_v))
 	{
-		VM_ERROR("Array index isn't a number");
+		VM_ERROR("Invalid array subscript");
 	}
 
 	PQ_Value* array = &vm->locals[idx];
 
-	int32_t sub_idx = (int32_t)idx_v.n;
+	int32_t sub_idx = (int32_t)pq_value_as_number(idx_v);
 
 	if (sub_idx >= array->a.count)
 	{
@@ -399,7 +409,7 @@ static void STORE_LOCAL_SUBSCRIPT(PQ_VM* vm, uint16_t idx)
 
 	if (array->type != VALUE_ARRAY)
 	{
-		VM_ERROR("Invalid array subscript");
+		VM_ERROR("Invalid local type");
 	}
 
 	int32_t sub_idx = (int32_t)pq_value_as_number(idx_v);
@@ -429,14 +439,19 @@ static void LOAD_GLOBAL_SUBSCRIPT(PQ_VM* vm, uint16_t idx)
 
 	PQ_Value idx_v = vm->stack[--vm->stack_size];
 
-	if (idx_v.type != VALUE_NUMBER)
+	if (!pq_value_can_be_number(idx_v))
 	{
 		VM_ERROR("Invalid array subscript");
 	}
 
 	PQ_Value* array = &vm->globals[idx];
 
-	int32_t sub_idx = (int32_t)idx_v.n;
+	if (array->type != VALUE_ARRAY)
+	{
+		VM_ERROR("Invalid global type");
+	}
+
+	int32_t sub_idx = (int32_t)pq_value_as_number(idx_v);
 
 	if (sub_idx >= array->a.count)
 	{
@@ -478,7 +493,7 @@ static void STORE_GLOBAL_SUBSCRIPT(PQ_VM* vm, uint16_t idx)
 
 	if (array->type != VALUE_ARRAY)
 	{
-		VM_ERROR("Invalid local type");
+		VM_ERROR("Invalid global type");
 	}
 
 	int32_t sub_idx = (int32_t)pq_value_as_number(idx_v);
@@ -530,14 +545,14 @@ static void LOAD_NULL(PQ_VM* vm)
 
 static void LOAD_ARRAY(PQ_VM* vm, uint16_t size)
 {
-	VERIFY_STACK_OVERFLOW();
-
 	PQ_Value array = pq_value_array(vm->arena, size);
 
 	for (uint16_t i = 0; i < array.a.count; i++)
 	{
 		array.a.elements[i] = pq_value_null();
 	}
+	
+	VERIFY_STACK_OVERFLOW();
 
 	vm->stack[vm->stack_size++] = array;
 
@@ -557,7 +572,12 @@ static void LOAD_ARRAY(PQ_VM* vm, uint16_t size)
 	OP(LESS_THAN, lt) \
 	OP(EQUALS, equals) \
 	OP(GREATER, greater) \
-	OP(LESS, less)
+	OP(LESS, less) \
+	OP(BW_OR, bw_or) \
+	OP(BW_AND, bw_and) \
+	OP(BW_XOR, bw_xor) \
+	OP(BW_LEFT_SHIFT, bw_left_shift) \
+	OP(BW_RIGHT_SHIFT, bw_right_shift) \
 
 #define OP(name, op) \
 	static void name(PQ_VM* vm) \
@@ -608,14 +628,14 @@ static void NEGATE(PQ_VM* vm)
 
 static void RETURN(PQ_VM* vm)
 {
+	VERIFY_STACK_UNDERFLOW();
+
+	PQ_Value ret = vm->stack[--vm->stack_size];
+
 	if (vm->call_frame_count <= 0)
 	{
 		VM_ERROR("Call frame underflow");
 	}
-
-	VERIFY_STACK_UNDERFLOW();
-
-	PQ_Value ret = vm->stack[--vm->stack_size];
 
 	PQ_CallFrame cf = vm->call_frames[--vm->call_frame_count];	
 
@@ -635,6 +655,8 @@ static void RETURN(PQ_VM* vm)
 	
 	if (ret.type != VALUE_NULL)
 	{
+		VERIFY_STACK_OVERFLOW();
+
 		vm->stack[vm->stack_size++] = ret;
 	}
 
@@ -709,6 +731,11 @@ bool pq_execute(PQ_VM* vm)
 		case INST_LESS:                   LESS(vm); break;
 		case INST_NOT:                    NOT(vm); break;
 		case INST_NEGATE:                 NEGATE(vm); break;
+		case INST_BW_OR:                  BW_OR(vm); break;
+		case INST_BW_AND:                 BW_AND(vm); break;
+		case INST_BW_XOR:                 BW_XOR(vm); break;
+		case INST_BW_LEFT_SHIFT:          BW_LEFT_SHIFT(vm); break;
+		case INST_BW_RIGHT_SHIFT:         BW_RIGHT_SHIFT(vm); break;
 		case INST_RETURN:                 RETURN(vm); break;
 		case INST_HALT:                   HALT(vm); break;
 

@@ -165,6 +165,31 @@ static inline PQ_Value pq_value_not(PQ_Value l)
 	return pq_value_boolean(!pq_value_as_boolean(l));
 }
 
+static inline PQ_Value pq_value_bw_or(PQ_Value l, PQ_Value r)
+{
+	return pq_value_number((float)((uint32_t)pq_value_as_number(l) | (uint32_t)pq_value_as_number(r)));
+}
+
+static inline PQ_Value pq_value_bw_and(PQ_Value l, PQ_Value r)
+{
+	return pq_value_number((float)((uint32_t)pq_value_as_number(l) & (uint32_t)pq_value_as_number(r)));
+}
+
+static inline PQ_Value pq_value_bw_xor(PQ_Value l, PQ_Value r)
+{
+	return pq_value_number((float)((uint32_t)pq_value_as_number(l) ^ (uint32_t)pq_value_as_number(r)));
+}
+
+static inline PQ_Value pq_value_bw_left_shift(PQ_Value l, PQ_Value r)
+{
+	return pq_value_number((float)((uint32_t)pq_value_as_number(l) << (uint32_t)pq_value_as_number(r)));
+}
+
+static inline PQ_Value pq_value_bw_right_shift(PQ_Value l, PQ_Value r)
+{
+	return pq_value_number((float)((uint32_t)pq_value_as_number(l) >> (uint32_t)pq_value_as_number(r)));
+}
+
 #undef OP
 #undef DEFINE_VALUE_OPERATIONS
 
@@ -201,6 +226,11 @@ static inline PQ_Value pq_value_not(PQ_Value l)
 	INST(LESS) \
 	INST(NOT) \
 	INST(NEGATE) \
+	INST(BW_OR) \
+	INST(BW_AND) \
+	INST(BW_XOR) \
+	INST(BW_LEFT_SHIFT) \
+	INST(BW_RIGHT_SHIFT) \
 	INST(RETURN) \
 	INST(HALT)
 
@@ -244,54 +274,66 @@ static inline bool pq_inst_needs_arg(const PQ_InstructionType type)
 //
 
 #define DEFINE_TOKENS \
-	TOKEN(UNKNOWN,        "unknown") \
+	TOKEN(UNKNOWN,            "unknown") \
 	\
-	TOKEN(STRING,         "string literal") \
-	TOKEN(NUMBER,         "number literal") \
-	TOKEN(IDENTIFIER,     "identifier") \
-	TOKEN(TRUE,           "`true`") \
-	TOKEN(FALSE,          "`false`") \
-	TOKEN(NULL,           "`null`") \
+	TOKEN(STRING,             "string literal") \
+	TOKEN(NUMBER,             "number literal") \
+	TOKEN(IDENTIFIER,         "identifier") \
+	TOKEN(TRUE,               "`true`") \
+	TOKEN(FALSE,              "`false`") \
+	TOKEN(NULL,               "`null`") \
 	\
-	TOKEN(VAR,            "keyword `var`") \
-	TOKEN(FOREVER,        "keyword `forever`") \
-	TOKEN(REPEAT,         "keyword `repeat`") \
-	TOKEN(UNTIL,          "keyword `until`") \
-	TOKEN(DEFINE,         "keyword `define`") \
-	TOKEN(RETURN,         "keyword `return`") \
-	TOKEN(IF,             "keyword `if`") \
-	TOKEN(ELSE,           "keyword `else`") \
-	TOKEN(BREAK,          "keyword `break`") \
-	TOKEN(FOREIGN,        "keyword `foreign`") \
+	TOKEN(VAR,                "keyword `var`") \
+	TOKEN(FOREVER,            "keyword `forever`") \
+	TOKEN(REPEAT,             "keyword `repeat`") \
+	TOKEN(UNTIL,              "keyword `until`") \
+	TOKEN(DEFINE,             "keyword `define`") \
+	TOKEN(RETURN,             "keyword `return`") \
+	TOKEN(IF,                 "keyword `if`") \
+	TOKEN(ELSE,               "keyword `else`") \
+	TOKEN(BREAK,              "keyword `break`") \
+	TOKEN(FOREIGN,            "keyword `foreign`") \
 	\
-	TOKEN(LESS,           "`<`") \
-	TOKEN(GREATER,        "`>`") \
-	TOKEN(LESS_THAN,      "`<=`") \
-	TOKEN(GREATER_THAN,   "`>=`") \
-	TOKEN(EQUALS,         "`=`") \
-	TOKEN(DOUBLE_EQUALS,  "`==`") \
-	TOKEN(EXCLAMATION,    "`!`") \
-	TOKEN(NOT_EQUALS,     "`!=`") \
-	TOKEN(DOUBLE_AND,     "`&&`") \
-	TOKEN(DOUBLE_PIPE,    "`||`") \
-	TOKEN(PERCENT,        "`%`") \
-	TOKEN(PERCENT_EQUALS, "`%=`") \
-	TOKEN(PLUS,           "`+`") \
-	TOKEN(PLUS_EQUALS,    "`+=`") \
-	TOKEN(DASH,           "`-`") \
-	TOKEN(DASH_EQUALS,    "`-=`") \
-	TOKEN(SLASH,          "`/`") \
-	TOKEN(SLASH_EQUALS,   "`/=`") \
-	TOKEN(STAR,           "`*`") \
-	TOKEN(STAR_EQUALS,    "`*=`") \
+	TOKEN(LESS,               "`<`") \
+	TOKEN(GREATER,            "`>`") \
+	TOKEN(LESS_THAN,          "`<=`") \
+	TOKEN(GREATER_THAN,       "`>=`") \
+	TOKEN(DOUBLE_EQUALS,      "`==`") \
+	TOKEN(EXCLAMATION,        "`!`") \
+	TOKEN(NOT_EQUALS,         "`!=`") \
+	TOKEN(DOUBLE_AND,         "`&&`") \
+	TOKEN(DOUBLE_PIPE,        "`||`") \
 	\
-	TOKEN(OPEN_BRACE,     "`{`") \
-	TOKEN(CLOSE_BRACE,    "`}`") \
-	TOKEN(OPEN_PAREN,     "`(`") \
-	TOKEN(CLOSE_PAREN,    "`)`") \
-	TOKEN(OPEN_BOX,       "`[`") \
-	TOKEN(CLOSE_BOX,      "`]`") \
-	TOKEN(COMMA,          "`,`")
+	TOKEN(PERCENT,            "`%`") \
+	TOKEN(PLUS,               "`+`") \
+	TOKEN(DASH,               "`-`") \
+	TOKEN(SLASH,              "`/`") \
+	TOKEN(STAR,               "`*`") \
+	TOKEN(LEFT_SHIFT,         "`<<`") \
+	TOKEN(RIGHT_SHIFT,        "`>>") \
+	TOKEN(PIPE,               "`|`") \
+	TOKEN(AND,                "`&`") \
+	TOKEN(CARET,              "`^`") \
+	\
+	TOKEN(EQUALS,             "`=`") \
+	TOKEN(PERCENT_EQUALS,     "`%=`") \
+	TOKEN(PLUS_EQUALS,        "`+=`") \
+	TOKEN(DASH_EQUALS,        "`-=`") \
+	TOKEN(SLASH_EQUALS,       "`/=`") \
+	TOKEN(STAR_EQUALS,        "`*=`") \
+	TOKEN(LEFT_SHIFT_EQUALS,  "`<<=`") \
+	TOKEN(RIGHT_SHIFT_EQUALS, "`>>=`") \
+	TOKEN(PIPE_EQUALS,        "`|=`") \
+	TOKEN(AND_EQUALS,         "`&=`") \
+	TOKEN(CARET_EQUALS,       "`^=`") \
+	\
+	TOKEN(OPEN_BRACE,         "`{`") \
+	TOKEN(CLOSE_BRACE,        "`}`") \
+	TOKEN(OPEN_PAREN,         "`(`") \
+	TOKEN(CLOSE_PAREN,        "`)`") \
+	TOKEN(OPEN_BOX,           "`[`") \
+	TOKEN(CLOSE_BOX,          "`]`") \
+	TOKEN(COMMA,              "`,`")
 
 #define TOKEN(name, fancy_name) TOKEN_##name,
 
@@ -332,17 +374,12 @@ static inline String pq_token_as_string(Arena* arena, const PQ_Token t, String s
 
 static inline bool pq_token_is_binary_op(const PQ_TokenType type)
 {
-	return type >= TOKEN_LESS && type <= TOKEN_STAR_EQUALS;
+	return type >= TOKEN_LESS && type <= TOKEN_CARET;
 }
 
 static inline bool pq_token_is_assign_op(const PQ_TokenType type)
 {	
-	return type == TOKEN_PLUS_EQUALS || 
-		type == TOKEN_DASH_EQUALS || 
-		type == TOKEN_SLASH_EQUALS || 
-		type == TOKEN_STAR_EQUALS || 
-		type == TOKEN_PERCENT_EQUALS || 
-		type == TOKEN_EQUALS;	
+	return type >= TOKEN_EQUALS && type <= TOKEN_CARET_EQUALS; 
 }
 
 // the precedences mostly follow C's.
@@ -355,20 +392,27 @@ static inline int8_t pq_token_precedence_of(const PQ_TokenType type)
 		case TOKEN_DOUBLE_AND: return 0;
 		case TOKEN_DOUBLE_PIPE: return 1;
 
+		case TOKEN_PIPE: return 2;
+		case TOKEN_CARET: return 3;
+		case TOKEN_AND: return 4;
+
 		case TOKEN_NOT_EQUALS:
-		case TOKEN_DOUBLE_EQUALS: return 2;  
+		case TOKEN_DOUBLE_EQUALS: return 5;  
 
 		case TOKEN_LESS:
 		case TOKEN_GREATER:
 		case TOKEN_LESS_THAN:
-		case TOKEN_GREATER_THAN: return 3;
+		case TOKEN_GREATER_THAN: return 6;
+
+		case TOKEN_LEFT_SHIFT: 
+		case TOKEN_RIGHT_SHIFT: return 7;
 
 		case TOKEN_PLUS:
-		case TOKEN_DASH: return 4;
+		case TOKEN_DASH: return 8;
 
 		case TOKEN_PERCENT:
 		case TOKEN_SLASH:
-		case TOKEN_STAR: return 5;
+		case TOKEN_STAR: return 9;
 
 		default: {}
 	}

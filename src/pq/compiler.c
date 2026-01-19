@@ -5,6 +5,7 @@
 	{ \
 		char what[2048]; \
 		sprintf(what, __VA_ARGS__); \
+		\
 		c->error(c->line, what); \
 	} while (0);
 
@@ -101,38 +102,53 @@ static PQ_Token parse_number(PQ_Compiler* c)
 		eat_char(c);
 	}
 
-	bool decimal = false;
-
-	// the first/second character may be the decimal point
-	if (peek_char(c, 0) == '.')
+	// hexadecimal
+	if (peek_char(c, 0) == '0' && (peek_char(c, 1) == 'X' || peek_char(c, 1) == 'x'))
 	{
-		decimal = true;
-
-		// bail out early if the next character isn't a number
-		if (!is_number(peek_char(c, 1))) 
-		{
-			C_ERROR("Unexpected %c", peek_char(c, 0));
-		}
-
 		eat_char(c);
-	}
+		eat_char(c);
 
-	// start looping
-	while (is_number(peek_char(c, 0)) || peek_char(c, 0) == '.')
-	{ 
+		while (is_alnum(peek_char(c, 0)))
+		{
+			eat_char(c);
+		}
+	}
+	// decimal
+	else
+	{		
+		bool decimal = false;
+	
+		// the first/second character may be the decimal point
 		if (peek_char(c, 0) == '.')
 		{
-			if (!decimal)
+			decimal = true;
+	
+			// bail out early if the next character isn't a number
+			if (!is_number(peek_char(c, 1))) 
 			{
-				decimal = true;
+				C_ERROR("Unexpected %c", peek_char(c, 0));
 			}
-			else
+	
+			eat_char(c);
+		}
+	
+		// start looping
+		while (is_number(peek_char(c, 0)) || peek_char(c, 0) == '.')
+		{ 
+			if (peek_char(c, 0) == '.')
 			{
-				C_ERROR("Unexpected `.` in number literal");
-			}
-		} 
-
-		eat_char(c);
+				if (!decimal)
+				{
+					decimal = true;
+				}
+				else
+				{
+					C_ERROR("Unexpected `.` in number literal");
+				}
+			} 
+	
+			eat_char(c);
+		}
 	}
 	
 	t.end = c->idx;
@@ -152,7 +168,7 @@ static PQ_Token parse_string(PQ_Compiler* c)
 
 	while (eat_char(c) != '\'')
 	{
-		if (!peek_char(c, 0))
+		if (!peek_char(c, 0) || peek_char(c, 0) == '\n')
 		{
 			C_ERROR("Expected `'` to close string literal");
 		}
@@ -191,6 +207,20 @@ static void tokenize(PQ_Compiler* c)
 					eat_char(c);
 					push_token(c, (PQ_Token){ TOKEN_LESS_THAN, c->line });	
 				}
+				else if (peek_char(c, 0) == '<')
+				{
+					eat_char(c);
+
+					if (peek_char(c, 0) == '=')
+					{
+						eat_char(c);
+						push_token(c, (PQ_Token){ TOKEN_LEFT_SHIFT_EQUALS, c->line });	
+					}
+					else
+					{
+						push_token(c, (PQ_Token){ TOKEN_LEFT_SHIFT, c->line });	
+					}
+				}
 				else
 				{
 					push_token(c, (PQ_Token){ TOKEN_LESS, c->line });	
@@ -205,6 +235,20 @@ static void tokenize(PQ_Compiler* c)
 				{
 					eat_char(c);
 					push_token(c, (PQ_Token){ TOKEN_GREATER_THAN, c->line });	
+				}
+				else if (peek_char(c, 0) == '>')
+				{
+					eat_char(c);
+				
+					if (peek_char(c, 0) == '=')
+					{
+						eat_char(c);
+						push_token(c, (PQ_Token){ TOKEN_RIGHT_SHIFT_EQUALS, c->line });	
+					}
+					else
+					{
+						push_token(c, (PQ_Token){ TOKEN_RIGHT_SHIFT, c->line });	
+					}
 				}
 				else
 				{
@@ -338,6 +382,15 @@ static void tokenize(PQ_Compiler* c)
 					eat_char(c);
 					push_token(c, (PQ_Token){ TOKEN_DOUBLE_AND, c->line });	
 				}
+				else if (peek_char(c, 0) == '=')
+				{
+					eat_char(c);
+					push_token(c, (PQ_Token){ TOKEN_AND_EQUALS, c->line });	
+				}
+				else
+				{
+					push_token(c, (PQ_Token){ TOKEN_AND, c->line });	
+				}
 			} break;
 
 			case '|':
@@ -348,6 +401,30 @@ static void tokenize(PQ_Compiler* c)
 				{
 					eat_char(c);
 					push_token(c, (PQ_Token){ TOKEN_DOUBLE_PIPE, c->line });	
+				}
+				else if (peek_char(c, 0) == '=')
+				{
+					eat_char(c);
+					push_token(c, (PQ_Token){ TOKEN_PIPE_EQUALS, c->line });	
+				}
+				else
+				{
+					push_token(c, (PQ_Token){ TOKEN_PIPE, c->line });	
+				}
+			} break;
+
+			case '^':
+			{
+				eat_char(c);
+
+				if (peek_char(c, 0) == '=')
+				{
+					eat_char(c);
+					push_token(c, (PQ_Token){ TOKEN_CARET_EQUALS, c->line });	
+				}
+				else
+				{
+					push_token(c, (PQ_Token){ TOKEN_CARET, c->line });	
 				}
 			} break;
 
@@ -736,6 +813,9 @@ static void emit_binary_expression(PQ_Compiler* c, int8_t min_precedence)
 		case TOKEN_SLASH:         push_inst(c, (PQ_Instruction){ INST_DIV }); break; 
 		case TOKEN_STAR:          push_inst(c, (PQ_Instruction){ INST_MUL }); break; 
 
+		case TOKEN_LEFT_SHIFT:    push_inst(c, (PQ_Instruction){ INST_BW_LEFT_SHIFT }); break;  
+		case TOKEN_RIGHT_SHIFT:   push_inst(c, (PQ_Instruction){ INST_BW_RIGHT_SHIFT }); break;  
+
 		case TOKEN_LESS:          push_inst(c, (PQ_Instruction){ INST_LESS }); break; 
 		case TOKEN_GREATER:       push_inst(c, (PQ_Instruction){ INST_GREATER }); break; 
 		case TOKEN_LESS_THAN:     push_inst(c, (PQ_Instruction){ INST_LESS_THAN }); break; 
@@ -744,6 +824,10 @@ static void emit_binary_expression(PQ_Compiler* c, int8_t min_precedence)
 		case TOKEN_DOUBLE_EQUALS: push_inst(c, (PQ_Instruction){ INST_EQUALS }); break;
 		case TOKEN_NOT_EQUALS:    push_inst(c, (PQ_Instruction){ INST_EQUALS }); push_inst(c, (PQ_Instruction){ INST_NOT }); break; 
 		
+		case TOKEN_PIPE:          push_inst(c, (PQ_Instruction){ INST_BW_OR }); break;
+		case TOKEN_CARET:         push_inst(c, (PQ_Instruction){ INST_BW_XOR }); break;
+		case TOKEN_AND:           push_inst(c, (PQ_Instruction){ INST_BW_AND }); break;
+
 		case TOKEN_DOUBLE_AND:    push_inst(c, (PQ_Instruction){ INST_AND }); break; 
 		case TOKEN_DOUBLE_PIPE:   push_inst(c, (PQ_Instruction){ INST_OR }); break; 
 		
@@ -824,12 +908,19 @@ static void emit_array_element_expression(PQ_Compiler* c)
 		{
 			case TOKEN_EQUALS: break;
 	
-			case TOKEN_PLUS_EQUALS:    push_inst(c, (PQ_Instruction){ INST_ADD }); break;
-			case TOKEN_DASH_EQUALS:    push_inst(c, (PQ_Instruction){ INST_SUB }); break;
-			case TOKEN_SLASH_EQUALS:   push_inst(c, (PQ_Instruction){ INST_DIV }); break;
-			case TOKEN_STAR_EQUALS:    push_inst(c, (PQ_Instruction){ INST_MUL }); break;
-			case TOKEN_PERCENT_EQUALS: push_inst(c, (PQ_Instruction){ INST_MOD }); break;
+			case TOKEN_PLUS_EQUALS:        push_inst(c, (PQ_Instruction){ INST_ADD }); break;
+			case TOKEN_DASH_EQUALS:        push_inst(c, (PQ_Instruction){ INST_SUB }); break;
+			case TOKEN_SLASH_EQUALS:       push_inst(c, (PQ_Instruction){ INST_DIV }); break;
+			case TOKEN_STAR_EQUALS:        push_inst(c, (PQ_Instruction){ INST_MUL }); break;
+			case TOKEN_PERCENT_EQUALS:     push_inst(c, (PQ_Instruction){ INST_MOD }); break;
 	
+			case TOKEN_LEFT_SHIFT_EQUALS:  push_inst(c, (PQ_Instruction){ INST_BW_LEFT_SHIFT }); break; 
+			case TOKEN_RIGHT_SHIFT_EQUALS: push_inst(c, (PQ_Instruction){ INST_BW_RIGHT_SHIFT }); break;
+
+			case TOKEN_PIPE_EQUALS:        push_inst(c, (PQ_Instruction){ INST_BW_OR }); break;
+			case TOKEN_CARET_EQUALS:       push_inst(c, (PQ_Instruction){ INST_BW_XOR }); break;
+			case TOKEN_AND_EQUALS:         push_inst(c, (PQ_Instruction){ INST_BW_AND }); break;
+
 			default: C_ERROR("Unexpected %s", pq_token_to_c_str(assign.type)); break;
 		}
 
@@ -1050,7 +1141,6 @@ static void emit_var_statement(PQ_Compiler* c)
 			// {
 			try_eat_token(c, TOKEN_OPEN_BRACE);
 
-
 			// ...
 			while (peek_token(c, 0).type != TOKEN_CLOSE_BRACE)
 			{
@@ -1060,10 +1150,10 @@ static void emit_var_statement(PQ_Compiler* c)
 					C_ERROR("Expected expression after `{` in initializer list, got `,`");
 				}
 
-				push_inst(c, (PQ_Instruction){ INST_LOAD_IMMEDIATE, get_or_create_immediate(c, pq_value_number(size++)) });
-				
 				// <expr>
 				emit_expression(c);
+
+				push_inst(c, (PQ_Instruction){ INST_LOAD_IMMEDIATE, get_or_create_immediate(c, pq_value_number(size++)) });
 
 				push_inst(c, (PQ_Instruction){ var->global ? INST_STORE_GLOBAL_SUBSCRIPT : INST_STORE_LOCAL_SUBSCRIPT, var->idx });
 
@@ -1534,7 +1624,7 @@ static void emit_break_statement(PQ_Compiler* c)
 {
 	if (!c->current_loop)
 	{
-		C_ERROR("Cannot use break outside a loop.");
+		C_ERROR("Cannot use break outside a loop");
 	}
 
 	// break
@@ -1683,11 +1773,11 @@ static void emit_statement(PQ_Compiler* c)
 		{
 			if (peek_token(c, 1).type == TOKEN_IF)
 			{
-				C_ERROR("Expected if statement before else if.");
+				C_ERROR("Expected if statement before else if");
 			}
 			else
 			{
-				C_ERROR("Expected if or else if statement before else.");
+				C_ERROR("Expected if or else if statement before else");
 			}
 		} break;
 
