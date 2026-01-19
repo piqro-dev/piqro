@@ -1,13 +1,12 @@
 #include <pq/vm.h>
 
-// HACK!
 #define VM_ERROR(...) \
 	do \
 	{ \
 		char what[2048]; \
 		sprintf(what, __VA_ARGS__); \
+		\
 		vm->error(what); \
-		vm->halt = true; \
 	} while (0)
 
 //
@@ -189,6 +188,8 @@ static void CALL(PQ_VM* vm, uint16_t idx)
 
 	PQ_CallFrame* cf = &vm->call_frames[vm->call_frame_count++];
 
+	cf->scratch = scratch_make(vm->arena);
+
 	cf->return_ip = vm->ip + 1;
 	
 	cf->arg_count = pi.arg_count;
@@ -260,6 +261,11 @@ static void CALL(PQ_VM* vm, uint16_t idx)
 
 		vm->local_count -= cf.local_count + cf.arg_count;
 
+		if (ret.type == VALUE_ARRAY)
+		{
+			VM_ERROR("Invalid array return");
+		}
+
 		if (ret.type != VALUE_NULL)
 		{
 			VERIFY_STACK_OVERFLOW();
@@ -267,6 +273,8 @@ static void CALL(PQ_VM* vm, uint16_t idx)
 			vm->stack[vm->stack_size++] = ret;
 		}
 		
+		scratch_release(cf.scratch);
+
 		vm->ip++;
 	}
 }
@@ -543,14 +551,17 @@ static void LOAD_NULL(PQ_VM* vm)
 	vm->ip++;
 }
 
+// TODO: arrays are the only values that get allocated dynamically at runtime. 
+//       they get cleaned up upon leaving a call frame, however, scopes don't 
+//       do this at the moment.
 static void LOAD_ARRAY(PQ_VM* vm, uint16_t size)
 {
-	PQ_Value array = pq_value_array(vm->arena, size);
-
-	for (uint16_t i = 0; i < array.a.count; i++)
+	if (vm->arena->offset + (size * sizeof(PQ_Value)) > vm->arena->capacity)
 	{
-		array.a.elements[i] = pq_value_null();
+		VM_ERROR("Out of memory");
 	}
+
+	PQ_Value array = pq_value_array(vm->arena, size);
 	
 	VERIFY_STACK_OVERFLOW();
 
@@ -660,6 +671,8 @@ static void RETURN(PQ_VM* vm)
 		vm->stack[vm->stack_size++] = ret;
 	}
 
+	scratch_release(cf.scratch);
+
 	vm->ip = cf.return_ip;
 }
 
@@ -696,7 +709,7 @@ bool pq_execute(PQ_VM* vm)
 {
 	if (vm->ip >= vm->instruction_count)
 	{
-		VM_ERROR("Instruction pointer out of bounds");;
+		VM_ERROR("Instruction pointer out of bounds");
 	}
 
 	PQ_Instruction it = vm->instructions[vm->ip];

@@ -37,11 +37,6 @@ static inline void* _arena_push(Arena* arena, size_t size, size_t align)
 	return ptr;
 }
 
-static inline void arena_pop(Arena* arena, size_t size)
-{
-	arena->offset -= size;
-}
-
 static inline void arena_reset(Arena* arena)
 {
 	arena->offset = 0;
@@ -50,3 +45,24 @@ static inline void arena_reset(Arena* arena)
 #define arena_push(arena, T) ((T*)_arena_push((arena), sizeof(T), alignof(T)))
 
 #define arena_push_array(arena, T, N) ((T*)_arena_push((arena), sizeof(T) * (N), alignof(T)))
+
+typedef struct
+{
+	Arena* arena;
+	size_t offset;
+} Scratch;
+
+static inline Scratch scratch_make(Arena* arena)
+{
+	Scratch scratch = {};
+
+	scratch.arena = arena;
+	scratch.offset = scratch.arena->offset;
+
+	return scratch;
+}
+
+static inline void scratch_release(Scratch scratch)
+{
+	scratch.arena->offset = scratch.offset;
+}

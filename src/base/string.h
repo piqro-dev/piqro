@@ -126,6 +126,12 @@ static inline bool str_equals(String l, String r)
 	return true;
 }
 
+static inline void str_remove_at(String* s, size_t idx)
+{
+	__builtin_memmove(s->buffer + idx, s->buffer + idx + 1, s->length - idx);
+	s->length--;	
+}
+
 //
 // util
 //

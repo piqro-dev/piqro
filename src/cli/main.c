@@ -1,26 +1,28 @@
-#include <base/log.h>
-
 #include <pq/compiler.h>
 
 #include <pq/vm.h>
 
 void compiler_error_fn(uint16_t line, const char* what)
 {
-	errorln("Compilation error: line %d: %s", line, what);
+	printf("Compilation error: line %d: %s\n", line, what);
 	exit(1);
 }
 
 void vm_error_fn(const char* what)
 {
-	errorln("Runtime error: %s", what);
+	printf("Runtime error: %s\n", what);
 	exit(1);
 }
 
 void print_proc(PQ_VM* vm)
 {
-	String v = pq_value_as_string(vm->arena, pq_get_local(vm, 0));
+	Scratch scratch = scratch_make(vm->arena);
 
-	println("%.*s", s_fmt(v));
+	String v = pq_value_as_string(scratch.arena, pq_get_local(vm, 0));
+
+	printf("%.*s\n", s_fmt(v));
+
+	scratch_release(scratch);
 
 	pq_return(vm);
 }
@@ -34,60 +36,69 @@ void sin_proc(PQ_VM* vm)
 
 void test_proc(PQ_VM* vm)
 {
-	bool expr = pq_value_as_boolean(pq_get_local(vm, 0));
-	String name = pq_value_as_string(vm->arena, pq_get_local(vm, 1));
+	Scratch scratch = scratch_make(vm->arena);
 
-	if (expr)
+	String name = pq_value_as_string(scratch.arena, pq_get_local(vm, 1));
+
+	if (pq_value_as_boolean(pq_get_local(vm, 0)))
 	{
-		println("TEST: [SUCCESS] %.*s", s_fmt(name));
+		printf("TEST: [SUCCESS] %.*s\n", s_fmt(name));
 	}
 	else
 	{
-		println("TEST: [FAILURE] %.*s", s_fmt(name));
+		printf("TEST: [FAILURE] %.*s\n", s_fmt(name));
 	}
+
+	scratch_release(scratch);
 
 	pq_return(vm);
 }
 
 void dump_stack(PQ_VM* vm)
 {
-	println("Stack:");
+	printf("Stack:\n");
 
 	if (vm->stack_size > 0)
 	{
+		Scratch scratch = scratch_make(vm->arena);
+
 		for (uint8_t i = 0; i < vm->stack_size; i++)
 		{
-			String v = pq_value_as_string(vm->arena, vm->stack[i]);
+			String v = pq_value_as_string(scratch.arena, vm->stack[i]);
 
-			println("   [%d] %.*s, %s", i, s_fmt(v), pq_value_to_c_str(vm->stack[i].type));
+			printf("   [%d] %.*s, %s\n", i, s_fmt(v), pq_value_to_c_str(vm->stack[i].type));
 		}
+
+		scratch_release(scratch);
 	}
 	else
 	{
-		println("   (empty)");
+		printf("   (empty)\n");
 	}
 }
 
 void dump_procedures(PQ_Compiler* c)
 {
-	println("Procedures:");
+	printf("Procedures:\n");
 
 	for (uint16_t i = 0; i < c->procedure_count; i++)
 	{
 		PQ_Procedure p = c->procedures[i];
 
-		println("  name: %.*s", s_fmt(p.name));
-		println("  idx: %d", p.idx);
-		println("  local_count: %d", p.local_count);
-		println("  arg_count: %d", p.arg_count);
-		println("  foreign: %s", p.foreign ? "true" : "false");
+		printf("  name: %.*s\n", s_fmt(p.name));
+		printf("  idx: %d\n", p.idx);
+		printf("  local_count: %d\n", p.local_count);
+		printf("  arg_count: %d\n", p.arg_count);
+		printf("  foreign: %s\n", p.foreign ? "true" : "false");
 	
-		println("");
+		printf("\n");
 	}
 }
 
 void dump_all_instructions(PQ_Compiler* c, PQ_VM* vm)
 {
+	Scratch scratch = scratch_make(c->arena);
+
 	for (uint16_t i = 0; i < vm->instruction_count; i++)
 	{
 		PQ_Instruction it = vm->instructions[i];
@@ -96,14 +107,20 @@ void dump_all_instructions(PQ_Compiler* c, PQ_VM* vm)
 		{
 			if (it.type == INST_CALL)
 			{
-				println("  %-4d | %-25s %d (%.*s)", i, pq_inst_to_c_str(it.type), it.arg, s_fmt(c->procedures[it.arg].name));
+				printf("  %-4d | %-25s %d (%.*s)\n", i, pq_inst_to_c_str(it.type), it.arg, s_fmt(c->procedures[it.arg].name));
+			}
+			else if (it.type == INST_LOAD_IMMEDIATE)
+			{
+				printf("  %-4d | %-25s %d (%.*s)\n", i, pq_inst_to_c_str(it.type), it.arg, s_fmt(pq_value_as_string(scratch.arena, c->immediates[it.arg])));
 			}
 			else
 			{
-				println("  %-4d | %-25s %d", i, pq_inst_to_c_str(it.type), it.arg);
+				printf("  %-4d | %-25s %d\n", i, pq_inst_to_c_str(it.type), it.arg);
 			}
 		}
 	}
+
+	scratch_release(scratch);
 }
 
 void dump_instruction(PQ_Compiler* c, PQ_VM* vm)
@@ -114,16 +131,16 @@ void dump_instruction(PQ_Compiler* c, PQ_VM* vm)
 	{
 		if (it.type == INST_CALL)
 		{
-			println("\n-> %d | %-25s %d (%.*s)", vm->ip, pq_inst_to_c_str(it.type), it.arg, s_fmt(c->procedures[it.arg].name));
+			printf("\n-> %d | %-25s %d (%.*s)\n", vm->ip, pq_inst_to_c_str(it.type), it.arg, s_fmt(c->procedures[it.arg].name));
 		}
 		else
 		{
-			println("\n-> %d | %-25s %d", vm->ip, pq_inst_to_c_str(it.type), it.arg);
+			printf("\n-> %d | %-25s %d\n", vm->ip, pq_inst_to_c_str(it.type), it.arg);
 		}
 	}
 	else
 	{
-		println("\n-> %d | %-25s", vm->ip, pq_inst_to_c_str(it.type));
+		printf("\n-> %d | %-25s\n", vm->ip, pq_inst_to_c_str(it.type));
 	}
 }
 
@@ -136,23 +153,29 @@ void dump_global_count(PQ_Compiler* c)
 		count++;
 	}
 
-	println("global count: %d", count);
-	println("");
+	printf("global count: %d\n", count);
+	printf("\n");
 }
 
 void dump_state(PQ_VM* vm)
 {	
-	println("\nVM info:");
-	println("local count: %d", vm->local_count);
-	println("stack size:  %d", vm->stack_size);
+	printf("\nVM info:\n");
+	printf("local count: %d\n", vm->local_count);
+	printf("stack size:  %d\n", vm->stack_size);
 	
-	println("\nVM locals:");
+	printf("\nVM locals:\n");
 
+	Scratch scratch = scratch_make(vm->arena);
+	
 	for (uint16_t i = 0; i < vm->local_count; i++)
 	{
-		String v = pq_value_as_string(vm->arena, vm->locals[i]);
-		println("   [%d] %.*s, %s", i, s_fmt(v), pq_value_to_c_str(vm->locals[i].type));
+		String v = pq_value_as_string(scratch.arena, vm->locals[i]);
+		printf("   [%d] %.*s, %s\n", i, s_fmt(v), pq_value_to_c_str(vm->locals[i].type));
 	}
+
+	scratch_release(scratch);
+
+	printf("\nVM memory consumption: %d bytes\n", vm->arena->offset);
 }
 
 static constexpr const char source[] = 
@@ -162,16 +185,17 @@ static constexpr const char source[] =
 	'\0'
 };
 
-static uint8_t mem[4 * 1024 * 1024];
-
 int main()
 {
-	Arena arena = arena_make(mem, sizeof(mem));
+	// NOTE: this amount of memory is probably sufficient to compile any program that's smaller than PQ_MAX_BLOB_SIZE.
+	static uint8_t compiler_mem[4 * 1024 * 1024];
+	
+	Arena compiler_arena = arena_make(compiler_mem, sizeof(compiler_mem));
 	
 	PQ_Compiler c = {};
 
 	{
-		pq_init_compiler(&c, &arena, s(source), compiler_error_fn);
+		pq_init_compiler(&c, &compiler_arena, s(source), compiler_error_fn);
 	
 		pq_declare_foreign_proc(&c, s("print"), 1);
 		pq_declare_foreign_proc(&c, s("sin"), 1);
@@ -180,31 +204,25 @@ int main()
 
 	PQ_CompiledBlob b = pq_compile(&c);
 
+	static uint8_t vm_mem[128 * 1024];
+
+	Arena vm_arena = arena_make(vm_mem, sizeof(vm_mem));
+
 	PQ_VM vm = {};
-	pq_init_vm(&vm, &arena, &b, vm_error_fn);
-	
-	dump_procedures(&c);
-	dump_global_count(&c);
-	dump_all_instructions(&c, &vm);
 
-	println("Compiled size: %d bytes", b.size);
-
-	pq_bind_foreign_proc(&vm, s("print"), print_proc);
-	pq_bind_foreign_proc(&vm, s("sin"), sin_proc);
-	pq_bind_foreign_proc(&vm, s("test"), test_proc);
-
-	bool r = true;
-
-	while (r)
 	{
-		//println("\n===============================");
-
-		//dump_instruction(&c, &vm);
-
-		r = pq_execute(&vm); 
-		
-		//dump_state(&vm);
-		//dump_stack(&vm);
+		pq_init_vm(&vm, &vm_arena, &b, vm_error_fn);
+	
+		pq_bind_foreign_proc(&vm, s("print"), print_proc);
+		pq_bind_foreign_proc(&vm, s("sin"), sin_proc);
+		pq_bind_foreign_proc(&vm, s("test"), test_proc);
+	
+		bool r = true;
+	
+		while (r)
+		{
+			r = pq_execute(&vm); 
+		}
 	}
 }
 

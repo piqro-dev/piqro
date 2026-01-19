@@ -14,6 +14,8 @@ typedef struct
 	uint16_t stack_base;
 	uint16_t local_count;
 	uint16_t arg_count;
+
+	Scratch scratch;
 } PQ_CallFrame;
 
 typedef void (*PQ_NativeProcedure)(PQ_VM* vm);

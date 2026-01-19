@@ -166,13 +166,23 @@ static PQ_Token parse_string(PQ_Compiler* c)
 	
 	eat_char(c);
 
-	while (eat_char(c) != '\'')
+	while (peek_char(c, 0) != '\'')
 	{
+		if (peek_char(c, 0) == '\\' && peek_char(c, 1) == '\'')
+		{
+			eat_char(c);
+			eat_char(c);
+		}
+
 		if (!peek_char(c, 0) || peek_char(c, 0) == '\n')
 		{
 			C_ERROR("Expected `'` to close string literal");
 		}
+
+		eat_char(c);
 	}
+
+	eat_char(c);
 
 	t.end = c->idx;
 
@@ -494,7 +504,7 @@ static void tokenize(PQ_Compiler* c)
 				}
 				else
 				{
-					C_ERROR("Encountered bad token");
+					C_ERROR("Encountered invalid/unsupported character");
 				}
 			} break;
 		}
@@ -583,7 +593,7 @@ static PQ_Procedure* get_or_create_procedure(PQ_Compiler* c, String name)
 
 	PQ_Procedure* proc = &c->procedures[c->procedure_count++];
 	
-	proc->name = str_copy(c->arena, name);
+	proc->name = name;
 	proc->idx = c->procedure_count - 1;
 
 	return proc;
@@ -601,7 +611,7 @@ static PQ_Variable* get_or_create_variable(PQ_Compiler* c, String name)
 
 	PQ_Variable* var = &c->variables[c->variable_count++];
 
-	var->name = str_copy(c->arena, name); 
+	var->name = name; 
 	var->idx = c->variable_count - 1;
 	
 	var->arg = false;
@@ -650,7 +660,11 @@ static void emit_number_expression(PQ_Compiler* c)
 {
 	PQ_Token number = eat_token(c);
 
-	PQ_Value imm = pq_value_number(str_as_number(str_copy_from_to(c->arena, c->source, number.start, number.end)));
+	Scratch scratch = scratch_make(c->arena);
+
+	PQ_Value imm = pq_value_number(str_as_number(str_copy_from_to(scratch.arena, c->source, number.start, number.end)));
+
+	scratch_release(scratch);
 
 	push_inst(c, (PQ_Instruction){ INST_LOAD_IMMEDIATE, get_or_create_immediate(c, imm) });
 }
@@ -848,7 +862,31 @@ static void emit_string_expression(PQ_Compiler* c)
 {
 	PQ_Token str = eat_token(c);
 
-	PQ_Value imm = pq_value_string(str_copy_from_to(c->arena, c->source, str.start, str.end));
+	String s = str_copy_from_to(c->arena, c->source, str.start, str.end);
+
+	// unescape string
+	for (size_t i = 0; i < s.length; i++)
+	{
+		if (s.buffer[i] == '\\')
+		{
+			char esc = 0;
+
+			switch (s.buffer[i + 1])
+			{
+				case 'n':  esc = '\n'; break;
+				case 'r':  esc = '\r'; break;
+				case 't':  esc = '\t'; break;
+				case '\\': esc = '\\'; break;
+				case '\'': esc = '\''; break;
+			}
+
+			str_remove_at(&s, i);
+
+			s.buffer[i] = esc;
+		}
+	}
+
+	PQ_Value imm = pq_value_string(s);
 
 	push_inst(c, (PQ_Instruction){ INST_LOAD_IMMEDIATE, get_or_create_immediate(c, imm) });
 }
@@ -1110,8 +1148,12 @@ static void emit_var_statement(PQ_Compiler* c)
 		else
 		{
 			PQ_Token number = eat_token(c);
+
+			Scratch scratch = scratch_make(c->arena);
 	
-			int32_t N = (int32_t)str_as_number(str_copy_from_to(c->arena, c->source, number.start, number.end));
+			int32_t N = (int32_t)str_as_number(str_copy_from_to(scratch.arena, c->source, number.start, number.end));
+		
+			scratch_release(scratch);
 			
 			if (N <= 0)
 			{
@@ -1177,7 +1219,7 @@ static void emit_var_statement(PQ_Compiler* c)
 			{
 				if (size == 0)
 				{
-					C_ERROR("Initializer list of unknown sized array cannot be empty");
+					C_ERROR("Initializer list of unknown size array cannot be empty");
 				}
 
 				var->array_size = size;
@@ -1204,7 +1246,7 @@ static void emit_var_statement(PQ_Compiler* c)
 		{
 			if (var->array_size == (uint16_t)-1)
 			{
-				C_ERROR("Declaration of unknown sized array is not allowed");
+				C_ERROR("Declaration of unknown size array is not allowed");
 			}
 
 			push_inst(c, (PQ_Instruction){ INST_LOAD_ARRAY, var->array_size });
