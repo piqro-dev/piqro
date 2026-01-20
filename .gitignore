@@ -1,5 +1,5 @@
 bin/*
 !bin/index.html
-!bin/index.js
+!bin/*.js
 !bin/style.css
 !bin/piqro.wasm

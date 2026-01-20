@@ -5,7 +5,7 @@
 	{ \
 		char what[2048]; \
 		sprintf(what, __VA_ARGS__); \
-		\
+		vm->halt = true; \
 		vm->error(what); \
 	} while (0)
 
@@ -685,7 +685,7 @@ static void HALT(PQ_VM* vm)
 	vm->halt = true;
 }
 
-void pq_init_vm(PQ_VM* vm, Arena* arena, const PQ_CompiledBlob* b, PQ_VMErrorFn error)
+void pq_vm_init(PQ_VM* vm, Arena* arena, const PQ_CompiledBlob* b, PQ_VMErrorFn error)
 {
 	if (b->size > PQ_MAX_BLOB_SIZE)
 	{
@@ -758,22 +758,22 @@ bool pq_execute(PQ_VM* vm)
 	return !vm->halt;
 }
 
-PQ_Value pq_get_local(PQ_VM* vm, uint8_t idx)
+PQ_Value pq_vm_get_local(PQ_VM* vm, uint8_t idx)
 {
 	return vm->locals[get_local_idx(vm, idx)];
 }
 
-PQ_Value pq_pop(PQ_VM* vm)
+PQ_Value pq_vm_pop(PQ_VM* vm)
 {
 	return vm->stack[--vm->stack_size];
 }
 
-void pq_push(PQ_VM* vm, PQ_Value v)
+void pq_vm_push(PQ_VM* vm, PQ_Value v)
 {
 	vm->stack[vm->stack_size++] = v;
 }
 
-void pq_bind_foreign_proc(PQ_VM* vm, String name, PQ_NativeProcedure proc)
+void pq_vm_bind_foreign_proc(PQ_VM* vm, String name, PQ_NativeProcedure proc)
 {
 	for (uint8_t i = 0; i < vm->proc_info_count; i++)
 	{

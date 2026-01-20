@@ -1,14 +1,14 @@
 #pragma once
 
 #include <base/common.h>
-
 #include <base/arena.h>
 
 #include <pq/types.h>
 
 typedef struct PQ_VM PQ_VM;
 
-typedef struct 
+typedef struct PQ_CallFrame PQ_CallFrame;
+struct PQ_CallFrame
 {
 	uint16_t return_ip;
 	uint16_t stack_base;
@@ -16,11 +16,12 @@ typedef struct
 	uint16_t arg_count;
 
 	Scratch scratch;
-} PQ_CallFrame;
+};
 
 typedef void (*PQ_NativeProcedure)(PQ_VM* vm);
 
-typedef struct
+typedef struct PQ_ProcedureInfo PQ_ProcedureInfo;
+struct PQ_ProcedureInfo
 {
 	bool foreign;
 
@@ -30,7 +31,7 @@ typedef struct
 
 	String foreign_name;
 	PQ_NativeProcedure proc;
-} PQ_ProcedureInfo;
+};
 
 typedef void (*PQ_VMErrorFn)(const char*);
 
@@ -67,18 +68,22 @@ struct PQ_VM
 	uint16_t bp;
 };
 
-void pq_init_vm(PQ_VM* vm, Arena* arena, const PQ_CompiledBlob* b, PQ_VMErrorFn error);
+void pq_vm_init(PQ_VM* vm, Arena* arena, const PQ_CompiledBlob* b, PQ_VMErrorFn error);
 
 bool pq_execute(PQ_VM* vm);
 
-PQ_Value pq_get_local(PQ_VM* vm, uint8_t index);
+PQ_Value pq_vm_get_local(PQ_VM* vm, uint8_t index);
 
-PQ_Value pq_pop(PQ_VM* vm);
+PQ_Value pq_vm_pop(PQ_VM* vm);
 
-void pq_push(PQ_VM* vm, PQ_Value v);
+void pq_vm_push(PQ_VM* vm, PQ_Value v);
 
-#define pq_return(vm) pq_push((vm), pq_value_null());
+void pq_vm_bind_foreign_proc(PQ_VM* vm, String name, PQ_NativeProcedure proc);
 
-#define pq_return_value(vm, ...) pq_push((vm), (__VA_ARGS__))
+//
+// helpers
+//
 
-void pq_bind_foreign_proc(PQ_VM* vm, String name, PQ_NativeProcedure proc);
+#define pq_vm_return(vm) pq_vm_push((vm), pq_value_null());
+
+#define pq_vm_return_value(vm, ...) pq_vm_push((vm), (__VA_ARGS__))

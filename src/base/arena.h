@@ -2,12 +2,13 @@
 
 #include <base/common.h>
 
-typedef struct
+typedef struct Arena Arena;
+struct Arena
 {
 	uint8_t* buffer;
 	size_t offset;
 	size_t capacity;
-} Arena;
+};
 
 static inline Arena arena_make(uint8_t* buffer, size_t capacity)
 {

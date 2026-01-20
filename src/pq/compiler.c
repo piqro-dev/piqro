@@ -302,7 +302,7 @@ static void tokenize(PQ_Compiler* c)
 				{
 					push_token(c, parse_number(c));
 				}
-				else if (peek_char(c, 0) == '=')
+				else if (peek_char(c, 1) == '=')
 				{
 					eat_char(c);
 					eat_char(c);
@@ -747,6 +747,11 @@ static void emit_procedure_expression(PQ_Compiler* c)
 	}
 
 	PQ_Procedure* proc = get_or_create_procedure(c, name);
+
+	//if (proc->foreign)
+	//{
+	//	proc->used = true;
+	//}
 
 	if (proc->arg_count != arg_count)
 	{
@@ -1846,7 +1851,7 @@ static void generate(PQ_Compiler* c)
 // interface
 //
 
-void pq_init_compiler(PQ_Compiler* c, Arena* arena, String source, PQ_CompilerErrorFn error)
+void pq_compiler_init(PQ_Compiler* c, Arena* arena, String source, PQ_CompilerErrorFn error)
 {
 	c->arena = arena;
 
@@ -1934,7 +1939,12 @@ static void write_procedures(PQ_Compiler* c, PQ_CompiledBlob* b)
 	for (uint16_t i = 0; i < c->procedure_count; i++)
 	{
 		PQ_Procedure p = c->procedures[i];
-		
+	
+		//if (!p.used)
+		//{
+		//	continue;
+		//}
+
 		write_to_blob(&p.foreign, b, sizeof(bool));
 		write_to_blob(&p.local_count, b, sizeof(uint8_t));
 		write_to_blob(&p.arg_count, b, sizeof(uint8_t));
@@ -2010,7 +2020,7 @@ PQ_CompiledBlob pq_compile(PQ_Compiler* c)
 	return b;
 }
 
-void pq_declare_foreign_proc(PQ_Compiler* c, String name, uint8_t arg_count)
+void pq_compiler_declare_foreign_proc(PQ_Compiler* c, String name, uint8_t arg_count)
 {
 	if (procedure_exists(c, name))
 	{

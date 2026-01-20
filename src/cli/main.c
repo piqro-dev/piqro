@@ -1,5 +1,4 @@
 #include <pq/compiler.h>
-
 #include <pq/vm.h>
 
 void compiler_error_fn(uint16_t line, const char* what)
@@ -18,29 +17,29 @@ void print_proc(PQ_VM* vm)
 {
 	Scratch scratch = scratch_make(vm->arena);
 
-	String v = pq_value_as_string(scratch.arena, pq_get_local(vm, 0));
+	String v = pq_value_as_string(scratch.arena, pq_vm_get_local(vm, 0));
 
 	printf("%.*s\n", s_fmt(v));
 
 	scratch_release(scratch);
 
-	pq_return(vm);
+	pq_vm_return(vm);
 }
 
 void sin_proc(PQ_VM* vm)
 {
-	float v = pq_value_as_number(pq_get_local(vm, 0));
+	float v = pq_value_as_number(pq_vm_get_local(vm, 0));
 
-	pq_return_value(vm, pq_value_number(__builtin_sinf(v)));
+	pq_vm_return_value(vm, pq_value_number(__builtin_sinf(v)));
 }
 
 void test_proc(PQ_VM* vm)
 {
 	Scratch scratch = scratch_make(vm->arena);
 
-	String name = pq_value_as_string(scratch.arena, pq_get_local(vm, 1));
+	String name = pq_value_as_string(scratch.arena, pq_vm_get_local(vm, 1));
 
-	if (pq_value_as_boolean(pq_get_local(vm, 0)))
+	if (pq_value_as_boolean(pq_vm_get_local(vm, 0)))
 	{
 		printf("TEST: [SUCCESS] %.*s\n", s_fmt(name));
 	}
@@ -51,7 +50,7 @@ void test_proc(PQ_VM* vm)
 
 	scratch_release(scratch);
 
-	pq_return(vm);
+	pq_vm_return(vm);
 }
 
 void dump_stack(PQ_VM* vm)
@@ -187,7 +186,7 @@ static constexpr const char source[] =
 
 int main()
 {
-	// NOTE: this amount of memory is probably sufficient to compile any program that's smaller than PQ_MAX_BLOB_SIZE.
+	// NOTE: this amount of memory is  sufficient to compile any program that's smaller than PQ_MAX_BLOB_SIZE.
 	static uint8_t compiler_mem[4 * 1024 * 1024];
 	
 	Arena compiler_arena = arena_make(compiler_mem, sizeof(compiler_mem));
@@ -195,27 +194,26 @@ int main()
 	PQ_Compiler c = {};
 
 	{
-		pq_init_compiler(&c, &compiler_arena, s(source), compiler_error_fn);
+		pq_compiler_init(&c, &compiler_arena, s(source), compiler_error_fn);
 	
-		pq_declare_foreign_proc(&c, s("print"), 1);
-		pq_declare_foreign_proc(&c, s("sin"), 1);
-		pq_declare_foreign_proc(&c, s("test"), 2);
+		pq_compiler_declare_foreign_proc(&c, s("print"), 1);
+		pq_compiler_declare_foreign_proc(&c, s("sin"), 1);
+		pq_compiler_declare_foreign_proc(&c, s("test"), 2);
 	}
 
 	PQ_CompiledBlob b = pq_compile(&c);
 
 	static uint8_t vm_mem[128 * 1024];
-
 	Arena vm_arena = arena_make(vm_mem, sizeof(vm_mem));
 
 	PQ_VM vm = {};
 
 	{
-		pq_init_vm(&vm, &vm_arena, &b, vm_error_fn);
+		pq_vm_init(&vm, &vm_arena, &b, vm_error_fn);
 	
-		pq_bind_foreign_proc(&vm, s("print"), print_proc);
-		pq_bind_foreign_proc(&vm, s("sin"), sin_proc);
-		pq_bind_foreign_proc(&vm, s("test"), test_proc);
+		pq_vm_bind_foreign_proc(&vm, s("print"), print_proc);
+		pq_vm_bind_foreign_proc(&vm, s("sin"), sin_proc);
+		pq_vm_bind_foreign_proc(&vm, s("test"), test_proc);
 	
 		bool r = true;
 	
@@ -227,5 +225,4 @@ int main()
 }
 
 #include <pq/compiler.c>
-
 #include <pq/vm.c>

@@ -32,6 +32,7 @@ set cli_libs= ^
 	-lkernel32
 
 set web_flags=%common_flags% ^
+	-Wno-incompatible-library-redeclaration ^
 	--target=wasm32 ^
 	-Xlinker --export-all ^
 	-Xlinker --no-entry ^

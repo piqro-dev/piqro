@@ -50,6 +50,7 @@
 
 #code-editor-container {
 	padding: 25px;
+	padding-right: 12.5px;
 }
 
 #code-editor-buttons {
@@ -79,4 +80,5 @@
 
 #canvas-container {
 	padding: 25px;
+	padding-left: 12.5px;
 }

@@ -1,9 +1,7 @@
 #pragma once
 
 #include <base/common.h>
-
 #include <base/string.h>
-
 #include <base/arena.h>
 
 //
@@ -20,7 +18,6 @@ typedef enum : uint8_t
 } PQ_ValueType;
 
 typedef struct PQ_Value PQ_Value;
-
 struct PQ_Value 
 {
 	PQ_ValueType type;
@@ -40,13 +37,9 @@ struct PQ_Value
 };
 
 #define pq_value_array(arena, N) ((PQ_Value){ VALUE_ARRAY, .a = { .elements = arena_push_array((arena), PQ_Value, (N)), .count = (N) } })
-
 #define pq_value_null()          ((PQ_Value){ VALUE_NULL })
-
 #define pq_value_number(v)       ((PQ_Value){ VALUE_NUMBER, .n = (float)(v) })
-
 #define pq_value_boolean(v)      ((PQ_Value){ VALUE_BOOLEAN, .b = (bool)(v) })
-
 #define pq_value_string(v)       ((PQ_Value){ VALUE_STRING, .s = v })
 
 static inline const char* pq_value_to_c_str(const PQ_ValueType type)
@@ -241,11 +234,12 @@ typedef enum : uint8_t
 	DEFINE_INSTRUCTIONS
 } PQ_InstructionType;
 
-typedef struct
+typedef struct PQ_Instruction PQ_Instruction;
+struct PQ_Instruction
 {
 	PQ_InstructionType type;
 	uint16_t arg;
-} PQ_Instruction;
+};
 
 #undef INST
 #define INST(name) case INST_##name: return #name;
@@ -342,14 +336,15 @@ typedef enum : uint8_t
 	DEFINE_TOKENS
 } PQ_TokenType;
 
-typedef struct
+typedef struct PQ_Token PQ_Token;
+struct PQ_Token
 {
 	PQ_TokenType type;
 
 	uint16_t line; 
 	uint32_t start;
 	uint32_t end;  
-} PQ_Token;
+};
 
 #undef TOKEN
 #define TOKEN(name, fancy_name) case TOKEN_##name: return fancy_name;
@@ -424,8 +419,9 @@ static inline int8_t pq_token_precedence_of(const PQ_TokenType type)
 // compiled blob
 //
 
-typedef struct 
+typedef struct PQ_CompiledBlob PQ_CompiledBlob;
+struct PQ_CompiledBlob 
 {
 	uint8_t* buffer;
 	uint16_t size;
-} PQ_CompiledBlob;
+};
