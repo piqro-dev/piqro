@@ -30,6 +30,12 @@ function decode(str) {
 }
 
 const env = {
+	memory: new WebAssembly.Memory({
+		initial: 10,
+		maximum: 100,
+		shared: true
+	}),
+
 	//
 	// libc
 	//
@@ -37,6 +43,7 @@ const env = {
 	atof(x)     { return Number(decode(x)); },
 	sinf(x)     { return Math.sin(x); },
 	fmodf(x, y) { return x % y; },
+	puts(text)  { console.log(decode(text)); },
 
 	//
 	// javascript exports
@@ -61,10 +68,22 @@ const env = {
 let wasm;
 let memory;
 
+let result = false;
+
+function execute() {
+	const view = new Uint8Array(wasm.instance.exports.memory.buffer, wasm.instance.exports.executing_ptr(), 1);		
+	
+	if (!Atomics.load(view, 0)) {
+		return;
+	}
+
+
+}
+
 onmessage = function(e) {
 	const msg = e.data;
 
-	if (msg.type == 'wasm') {
+	if (msg.type == 'init') {
 		console.log('Got module, initializing');
 
 		WebAssembly.instantiate(msg.module, { env: env }).then(function(instance) {
@@ -75,11 +94,21 @@ onmessage = function(e) {
 
 			memory = new Uint8Array(wasm.instance.exports.memory.buffer);
 		
-			wasm.instance.exports.web_init();
+			wasm.instance.exports.init();
 		});
-	} else if (msg.type == 'run') {
-		wasm.instance.exports.web_run({ source: msg.source, length: msg.source.length });
-	} else {
-		console.error('Got invalid message type!');
+	}
+
+	if (msg.type == 'run') {
+		const view = new Uint8Array(wasm.instance.exports.memory.buffer, wasm.instance.exports.executing_ptr(), 1);		
+
+		Atomics.store(view, 0, true);
+
+		if (Atomics.load(view, 0)) {
+			Atomics.store(view, 0, false);
+		}
+
+		wasm.instance.exports.compile({ source: msg.source, length: msg.source.length });
+	
+
 	}
 }

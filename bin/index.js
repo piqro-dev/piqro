@@ -18,14 +18,14 @@ worker.onmessage = function(e) {
 
 // callbacks
 document.getElementById('run-button').onclick = function() {
-	const textArea = document.getElementById('editor');
+	const e = document.getElementById('editor');
 
-	worker.postMessage({ type: 'run', source: textArea.value });
+	worker.postMessage({ type: 'run', source: e.value });
 }
 
 // compile module and send it over to the worker thread
 WebAssembly.compileStreaming(fetch('piqro.wasm')).then(function(module) {
-	worker.postMessage({ type: 'wasm', module: module });
+	worker.postMessage({ type: 'init', module: module });
 });
 
 //

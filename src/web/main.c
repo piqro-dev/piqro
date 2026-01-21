@@ -1,3 +1,5 @@
+#include <stdatomic.h>
+
 #include <web/support.h>
 
 #include <pq/compiler.h>
@@ -7,6 +9,7 @@
 #include <runtime/state.h>
 
 static bool had_error = false;
+static atomic_bool executing = false; 
 
 static void compiler_error_fn(uint16_t line, const char* what)
 {
@@ -50,29 +53,48 @@ static void vm_error_fn(const char* what)
 	js_post_message(msg);
 }
 
+//
+// web interface
+//
 
-void web_init() 
+void* executing_ptr()
 {
-	static Arena rt_arena;
-
-	static uint8_t mem[16 * 1024];
-	rt_arena = arena_make(mem, sizeof(mem));
-
-	static RT_State rt;
-	rt_state_init(&rt_arena, &rt);
+	return &executing;
 }
 
-void web_run(__externref_t e)
+static Arena rt_arena;
+static Arena vm_arena;
+static Arena compiler_arena;
+
+void init() 
+{
+	static uint8_t compiler_mem[4 * 1024 * 1024];
+	compiler_arena = arena_make(compiler_mem, sizeof(compiler_mem));
+
+	static uint8_t vm_mem[128 * 1024];
+	vm_arena = arena_make(vm_mem, sizeof(vm_mem));
+
+	static uint8_t rt_mem[16 * 1024];
+	rt_arena = arena_make(rt_mem, sizeof(rt_mem));
+}
+
+static PQ_Compiler c;
+static PQ_VM vm;
+static RT_State rt;
+
+void compile(__externref_t e)
 {
 	had_error = false;
+	atomic_store(&executing, false);
 
-	Arena compiler_arena;
+	arena_reset(&compiler_arena);
+	arena_reset(&vm_arena);
+	arena_reset(&rt_arena);
+
+	rt = (RT_State){};
+
+	rt_state_init(&rt_arena, &rt);
 	
-	{
-		static uint8_t mem[4 * 1024 * 1024];
-		compiler_arena = arena_make(mem, sizeof(mem));
-	}
-
 	// load the source code
 	String source = {};
 
@@ -94,39 +116,25 @@ void web_run(__externref_t e)
 	js_get_string(e, "source", source.buffer);
 
 	// compilation
-	PQ_Compiler c = {};
+	c = (PQ_Compiler){};
 
-	{
-		pq_compiler_init(&c, &compiler_arena, source, compiler_error_fn);
-	
-		rt_declare_procedures(&c);
-	}
+	pq_compiler_init(&c, &compiler_arena, source, compiler_error_fn);
+	rt_declare_procedures(&c);
 	
 	PQ_CompiledBlob b = pq_compile(&c);
 
-	// don't even attempt to continue at this point
-	if (had_error) 
-	{
-		return;
-	}
-
-	Arena vm_arena;
-
-	{
-		static uint8_t mem[128 * 1024];
-		vm_arena = arena_make(mem, sizeof(mem));
-	}
-
 	// execution
-	PQ_VM vm = {};
+	vm = (PQ_VM){};
+	
+	pq_vm_init(&vm, &vm_arena, &b, vm_error_fn);
+	rt_bind_procedures(&vm);
 
-	{
-		pq_vm_init(&vm, &vm_arena, &b, vm_error_fn);
-	
-		rt_bind_procedures(&vm);
-	
-		do {} while (pq_execute(&vm));
-	}
+	atomic_store(&executing, true);
+}
+
+bool execute()
+{
+	return atomic_load(&executing) && pq_execute(&vm);
 }
 
 #include <pq/compiler.c>
