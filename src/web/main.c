@@ -9,7 +9,6 @@
 #include <runtime/state.h>
 
 static bool had_error = false;
-static atomic_bool executing = false; 
 
 static void compiler_error_fn(uint16_t line, const char* what)
 {
@@ -57,14 +56,16 @@ static void vm_error_fn(const char* what)
 // web interface
 //
 
-void* executing_ptr()
-{
-	return &executing;
-}
-
 static Arena rt_arena;
 static Arena vm_arena;
 static Arena compiler_arena;
+
+static atomic_bool should_stop;
+
+atomic_bool* should_stop_ptr()
+{
+	return &should_stop;
+}
 
 void init() 
 {
@@ -76,16 +77,17 @@ void init()
 
 	static uint8_t rt_mem[16 * 1024];
 	rt_arena = arena_make(rt_mem, sizeof(rt_mem));
+
+	atomic_store(&should_stop, true);
 }
 
 static PQ_Compiler c;
 static PQ_VM vm;
 static RT_State rt;
 
-void compile(__externref_t e)
+void run(__externref_t e)
 {
 	had_error = false;
-	atomic_store(&executing, false);
 
 	arena_reset(&compiler_arena);
 	arena_reset(&vm_arena);
@@ -94,8 +96,7 @@ void compile(__externref_t e)
 	rt = (RT_State){};
 
 	rt_state_init(&rt_arena, &rt);
-	
-	// load the source code
+
 	String source = {};
 
 	source.length = (size_t)js_get_int(e, "length");
@@ -123,18 +124,18 @@ void compile(__externref_t e)
 	
 	PQ_CompiledBlob b = pq_compile(&c);
 
+	if (had_error)
+	{
+		return;
+	}
+
 	// execution
 	vm = (PQ_VM){};
 	
 	pq_vm_init(&vm, &vm_arena, &b, vm_error_fn);
 	rt_bind_procedures(&vm);
 
-	atomic_store(&executing, true);
-}
-
-bool execute()
-{
-	return atomic_load(&executing) && pq_execute(&vm);
+	while (!atomic_load(&should_stop) && pq_execute(&vm)) {}
 }
 
 #include <pq/compiler.c>

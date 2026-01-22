@@ -9,9 +9,13 @@
 extern double atof(const char*);
 extern float fmodf(float, float);
 
+extern void puts(const char*);
+
 //
 // javascript imports
 //
+
+extern void js_alert(const char*);
 
 extern void js_post_message(__externref_t);
 
@@ -21,7 +25,7 @@ extern void js_console_error(const char*);
 extern __externref_t js_string(const char*);
 extern __externref_t js_obj();
 
-extern void js_set_ptr(__externref_t, const char*, void*);
+extern void js_set_int(__externref_t, const char*, int32_t);
 extern void js_set_string(__externref_t, const char*, const char*);
 
 extern int32_t js_get_int(__externref_t, const char*);
@@ -60,7 +64,7 @@ static inline int printf(const char* fmt, ...)
 	int s = vsnprintf(out, sizeof(out), fmt, args);
 	va_end(args);
 
-	js_console_log(out);
+	puts(out);
 
 	return s;
 }

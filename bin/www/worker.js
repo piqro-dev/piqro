@@ -1,4 +1,4 @@
-"use strict"
+"use strict";
 
 let encoder = new TextEncoder();
 let decoder = new TextDecoder('utf-8');
@@ -20,34 +20,32 @@ function encode(str, value, len) {
 }
 
 function decode(str) {
+	const mem = memory.slice();
+
 	let end = str;
 
-	while (memory[end]) {
+	while (mem[end]) {
 		end++;
 	}
 
-	return decoder.decode(memory.subarray(str, end));
+	return decoder.decode(mem.subarray(str, end));
 }
 
 const env = {
-	memory: new WebAssembly.Memory({
-		initial: 10,
-		maximum: 100,
-		shared: true
-	}),
-
 	//
 	// libc
 	//
 	
 	atof(x)     { return Number(decode(x)); },
 	sinf(x)     { return Math.sin(x); },
-	fmodf(x, y) { return x % y; },
+	fmodf(x, y) { return Math.fround(x % y); },
 	puts(text)  { console.log(decode(text)); },
 
 	//
 	// javascript exports
 	//
+
+	js_alert(text)                    { alert(decode(text)); },
 
 	js_post_message(e)                { postMessage(e); },
 
@@ -57,58 +55,51 @@ const env = {
 	js_string(text)                   { return decode(text); },
 	js_obj()                          { return {}; },
 
-	js_set_ptr(obj, proprety, ptr)    { obj[decode(property)] = ptr; },
+	js_set_int(obj, proprety, v)      { obj[decode(property)] = v; },
 	js_set_string(obj, property, v)   { obj[decode(property)] = decode(v); },
 
 	js_get_int(obj, property)         { return obj[decode(property)]; },
 	js_get_string(obj, property, out) { encode(out, obj[decode(property)]); },
 	js_get(obj, property)             { return obj[decode(property)]; },
 };
-
-let wasm;
-let memory;
-
-let result = false;
-
-function execute() {
-	const view = new Uint8Array(wasm.instance.exports.memory.buffer, wasm.instance.exports.executing_ptr(), 1);		
 	
-	if (!Atomics.load(view, 0)) {
-		return;
-	}
+let wasm = null;
+let memory = null;
 
+let ready = false;
+let interval = null;
 
-}
-
-onmessage = function(e) {
+onmessage = async function(e) {
 	const msg = e.data;
 
 	if (msg.type == 'init') {
-		console.log('Got module, initializing');
-
 		WebAssembly.instantiate(msg.module, { env: env }).then(function(instance) {
 			wasm = {
 				module: msg.module,
 				instance: instance
-			}
+			};
+	
+	 		memory = new Uint8Array(wasm.instance.exports.memory.buffer);
 
-			memory = new Uint8Array(wasm.instance.exports.memory.buffer);
-		
 			wasm.instance.exports.init();
+	 		
+	 		ready = true;
 		});
 	}
 
 	if (msg.type == 'run') {
-		const view = new Uint8Array(wasm.instance.exports.memory.buffer, wasm.instance.exports.executing_ptr(), 1);		
-
-		Atomics.store(view, 0, true);
-
-		if (Atomics.load(view, 0)) {
-			Atomics.store(view, 0, false);
+		if (!ready) {
+			return;
 		}
 
-		wasm.instance.exports.compile({ source: msg.source, length: msg.source.length });
-	
+		const shouldStopPtr = wasm.instance.exports.should_stop_ptr();
 
+		if (Atomics.load(memory, shouldStopPtr)) {	
+			postMessage({ type: 'memory', memory, shouldStopPtr });
+			
+			Atomics.store(memory, shouldStopPtr, false);
+			
+			wasm.instance.exports.run({ source: msg.source, length: msg.source.length});
+		}
 	}
 }

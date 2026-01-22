@@ -504,7 +504,7 @@ static void tokenize(PQ_Compiler* c)
 				}
 				else
 				{
-					C_ERROR("Encountered invalid/unsupported character");
+					C_ERROR("Encountered invalid/unsupported character '%c'", peek_char(c, 0));
 				}
 			} break;
 		}

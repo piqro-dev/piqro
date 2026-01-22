@@ -32,11 +32,14 @@ set cli_libs= ^
 	-lkernel32
 
 set web_flags=%common_flags% ^
+	-matomics ^
+	-mbulk-memory ^
 	-Wno-incompatible-library-redeclaration ^
 	--target=wasm32 ^
 	-Xlinker --export-all ^
 	-Xlinker --no-entry ^
-	-Xlinker --allow-undefined
+	-Xlinker --allow-undefined ^
+	-Xlinker --shared-memory
 
 if "%cli%"=="true" (
 	set flags=%cli_flags% %cli_libs%
@@ -50,10 +53,10 @@ if "%cli%"=="true" (
 )
 
 if "%web%"=="true" (
-	set flags=%web_flags% -Oz 
+	set flags=%web_flags% -Oz
 
 	echo building web...
-	clang src/web/main.c -o bin/piqro.wasm !flags!
+	clang src/web/main.c -o bin/www/piqro.wasm !flags!
 
 	goto exit
 )
