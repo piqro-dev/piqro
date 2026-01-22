@@ -7,7 +7,6 @@
 //
 
 extern double atof(const char*);
-extern float fmodf(float, float);
 
 extern void puts(const char*);
 

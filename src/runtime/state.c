@@ -9,7 +9,60 @@ static RT_State* g_state;
 		printf("%.*s\n", s_fmt(pq_value_as_string(scratch.arena, pq_vm_get_local(vm, 0)))); \
 		scratch_release(scratch); \
 		pq_vm_return(vm); \
-	})
+	}) \
+	\
+	PROC(abs, 1, \
+	{ \
+		pq_vm_return_value(vm, pq_value_number(__builtin_fabsf(pq_value_as_number(pq_vm_get_local(vm, 0))))); \
+	}) \
+	PROC(floor, 1, \
+	{ \
+		pq_vm_return_value(vm, pq_value_number(__builtin_floorf(pq_value_as_number(pq_vm_get_local(vm, 0))))); \
+	}) \
+	PROC(ceil, 1, \
+	{ \
+		pq_vm_return_value(vm, pq_value_number(__builtin_ceilf(pq_value_as_number(pq_vm_get_local(vm, 0))))); \
+	}) \
+	PROC(sqrt, 1, \
+	{ \
+		pq_vm_return_value(vm, pq_value_number(__builtin_sqrtf(pq_value_as_number(pq_vm_get_local(vm, 0))))); \
+	}) \
+	PROC(sin, 1, \
+	{ \
+		pq_vm_return_value(vm, pq_value_number(__builtin_sinf(pq_value_as_number(pq_vm_get_local(vm, 0))))); \
+	}) \
+	PROC(cos, 1, \
+	{ \
+		pq_vm_return_value(vm, pq_value_number(__builtin_cosf(pq_value_as_number(pq_vm_get_local(vm, 0))))); \
+	}) \
+	PROC(tan, 1, \
+	{ \
+		pq_vm_return_value(vm, pq_value_number(__builtin_tanf(pq_value_as_number(pq_vm_get_local(vm, 0))))); \
+	}) \
+	PROC(asin, 1, \
+	{ \
+		pq_vm_return_value(vm, pq_value_number(__builtin_asinf(pq_value_as_number(pq_vm_get_local(vm, 0))))); \
+	}) \
+	PROC(acos, 1, \
+	{ \
+		pq_vm_return_value(vm, pq_value_number(__builtin_acosf(pq_value_as_number(pq_vm_get_local(vm, 0))))); \
+	}) \
+	PROC(atan, 1, \
+	{ \
+		pq_vm_return_value(vm, pq_value_number(__builtin_atanf(pq_value_as_number(pq_vm_get_local(vm, 0))))); \
+	}) \
+	PROC(pow, 2, \
+	{ \
+		pq_vm_return_value(vm, pq_value_number(__builtin_powf(pq_value_as_number(pq_vm_get_local(vm, 0)), pq_value_as_number(pq_vm_get_local(vm, 1))))); \
+	}) \
+	PROC(ln, 1, \
+	{ \
+		pq_vm_return_value(vm, pq_value_number(__builtin_logf(pq_value_as_number(pq_vm_get_local(vm, 0))))); \
+	}) \
+	PROC(log, 1, \
+	{ \
+		pq_vm_return_value(vm, pq_value_number(__builtin_log10f(pq_value_as_number(pq_vm_get_local(vm, 0))))); \
+	}) \
 
 #define PROC(name, arg_count, ...) \
 	static void rt_proc_##name(PQ_VM* vm) \

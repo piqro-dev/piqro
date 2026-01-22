@@ -36,10 +36,19 @@ const env = {
 	// libc
 	//
 	
-	atof(x)     { return Number(decode(x)); },
-	sinf(x)     { return Math.sin(x); },
-	fmodf(x, y) { return Math.fround(x % y); },
-	puts(text)  { console.log(decode(text)); },
+	puts(text)   { console.log(decode(text)); },
+	atof(x)      { return Number(decode(x)); },
+	
+	fmodf(x, y)  { return Math.fround(x % y); },
+	sinf(x)      { return Math.sin(x); },
+	cosf(x)      { return Math.cos(x); },
+	tanf(x)      { return Math.tan(x); },
+	asinf(x)     { return Math.asin(x); },
+	acosf(x)     { return Math.acos(x); },
+	atanf(x)     { return Math.atan(x); },
+	powf(x, y)   { return Math.pow(x, y); },
+	logf(x)      { return Math.log(x); },
+	log10f(x)    { return Math.log10(x); },
 
 	//
 	// javascript exports
