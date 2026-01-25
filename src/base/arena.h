@@ -25,10 +25,7 @@ static inline void* _arena_push(Arena* arena, size_t size, size_t align)
 {
 	size_t offset = __builtin_align_up(arena->offset, align);
 	
-	if (offset + size > arena->capacity)
-	{
-		return nullptr;
-	}
+	ASSERT(offset + size < arena->capacity);
 
 	arena->offset = offset + size;
 

@@ -8,17 +8,24 @@
 typedef struct RT_Canvas RT_Canvas;
 struct RT_Canvas
 {
-	uint8_t* buffer;
+	uint8_t* back_buffer;
+	uint8_t* fore_buffer;
+
+	uint8_t frame_idx;
+
 	uint16_t width;
 	uint16_t height;
+
+	uint8_t back_color;
+	uint8_t fore_color;
 };
 
-#define R_COLOR(r, g, b) (((r >> 5) << 5) | ((g >> 5) << 2) | (b >> 6))
+RT_Canvas rt_canvas_make(Arena* arena, uint16_t width, uint16_t height);
 
-RT_Canvas canvas_make(Arena* arena, uint16_t width, uint16_t height);
+void rt_canvas_clear(RT_Canvas* c);
 
-void rt_canvas_clear(RT_Canvas* c, uint8_t color);
+void rt_canvas_present(RT_Canvas* c);
 
-void rt_canvas_rect(RT_Canvas* c, int16_t x, int16_t y, int16_t w, int16_t h, uint8_t color);
+void rt_canvas_rect(RT_Canvas* c, int16_t x, int16_t y, int16_t w, int16_t h);
 
-void rt_canvas_put(RT_Canvas* c, int16_t x, int16_t y, uint8_t color);
+void rt_canvas_put(RT_Canvas* c, int16_t x, int16_t y);

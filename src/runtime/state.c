@@ -1,13 +1,49 @@
 #include <runtime/state.h>
 
-static RT_State* g_state;
+static RT_State* state;
 
 #define DEFINE_RT_PROCEDURES \
 	PROC(print, 1, \
 	{ \
 		Scratch scratch = scratch_make(vm->arena); \
+		\
 		printf("%.*s\n", s_fmt(pq_value_as_string(scratch.arena, pq_vm_get_local(vm, 0)))); \
+		\
 		scratch_release(scratch); \
+		\
+		pq_vm_return(vm); \
+	}) \
+	\
+	PROC(clear, 0, \
+	{ \
+		rt_canvas_clear(&state->canvas); \
+		\
+		pq_vm_return(vm); \
+	}) \
+	PROC(rect, 4, \
+	{ \
+		int16_t x = pq_value_as_number(pq_vm_get_local(vm, 0)); \
+		int16_t y = pq_value_as_number(pq_vm_get_local(vm, 1)); \
+		int16_t w = pq_value_as_number(pq_vm_get_local(vm, 2)); \
+		int16_t h = pq_value_as_number(pq_vm_get_local(vm, 3)); \
+		\
+		rt_canvas_rect(&state->canvas, x, y, w, h); \
+		\
+		pq_vm_return(vm); \
+	}) \
+	PROC(put, 2, \
+	{ \
+		int16_t x = pq_value_as_number(pq_vm_get_local(vm, 0)); \
+		int16_t y = pq_value_as_number(pq_vm_get_local(vm, 1)); \
+		\
+		rt_canvas_put(&state->canvas, x, y); \
+		\
+		pq_vm_return(vm); \
+	}) \
+	PROC(present, 0, \
+	{ \
+		rt_canvas_present(&state->canvas); \
+		\
 		pq_vm_return(vm); \
 	}) \
 	\
@@ -55,14 +91,14 @@ static RT_State* g_state;
 	{ \
 		pq_vm_return_value(vm, pq_value_number(__builtin_powf(pq_value_as_number(pq_vm_get_local(vm, 0)), pq_value_as_number(pq_vm_get_local(vm, 1))))); \
 	}) \
-	PROC(ln, 1, \
+	PROC(log, 1, \
 	{ \
 		pq_vm_return_value(vm, pq_value_number(__builtin_logf(pq_value_as_number(pq_vm_get_local(vm, 0))))); \
 	}) \
-	PROC(log, 1, \
+	PROC(log10, 1, \
 	{ \
 		pq_vm_return_value(vm, pq_value_number(__builtin_log10f(pq_value_as_number(pq_vm_get_local(vm, 0))))); \
-	}) \
+	})
 
 #define PROC(name, arg_count, ...) \
 	static void rt_proc_##name(PQ_VM* vm) \
@@ -80,9 +116,9 @@ void rt_state_init(Arena* arena, RT_State* s)
 {
 	s->arena = arena;
 
-	s->canvas = canvas_make(s->arena, RT_CANVAS_WIDTH, RT_CANVAS_HEIGHT);
+	s->canvas = rt_canvas_make(s->arena, RT_CANVAS_WIDTH, RT_CANVAS_HEIGHT);
 
-	g_state = s;
+	state = s;
 }
 
 #undef PROC
@@ -91,7 +127,7 @@ void rt_state_init(Arena* arena, RT_State* s)
 
 void rt_declare_procedures(PQ_Compiler* c)
 {
-	ASSERT(g_state);
+	ASSERT(state);
 
 	DEFINE_RT_PROCEDURES
 }
@@ -102,7 +138,7 @@ void rt_declare_procedures(PQ_Compiler* c)
 
 void rt_bind_procedures(PQ_VM* vm)
 {
-	ASSERT(g_state);
+	ASSERT(state);
 
 	DEFINE_RT_PROCEDURES
 }

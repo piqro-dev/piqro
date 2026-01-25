@@ -55,7 +55,7 @@ static inline void web_store_ref(uint32_t h, __externref_t r)
 __attribute__((format(printf, 1, 2)))
 static inline int printf(const char* fmt, ...)
 {
-	char out[4096];
+	char out[1024] = {};
 
 	va_list args;
 

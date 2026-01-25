@@ -64,7 +64,7 @@ const env = {
 	js_string(text)                   { return decode(text); },
 	js_obj()                          { return {}; },
 
-	js_set_int(obj, proprety, v)      { obj[decode(property)] = v; },
+	js_set_int(obj, property, v)      { obj[decode(property)] = v; },
 	js_set_string(obj, property, v)   { obj[decode(property)] = decode(v); },
 
 	js_get_int(obj, property)         { return obj[decode(property)]; },
@@ -76,7 +76,6 @@ let wasm = null;
 let memory = null;
 
 let ready = false;
-let interval = null;
 
 onmessage = async function(e) {
 	const msg = e.data;
@@ -91,7 +90,7 @@ onmessage = async function(e) {
 	 		memory = new Uint8Array(wasm.instance.exports.memory.buffer);
 
 			wasm.instance.exports.init();
-	 		
+
 	 		ready = true;
 		});
 	}
@@ -104,11 +103,13 @@ onmessage = async function(e) {
 		const shouldStopPtr = wasm.instance.exports.should_stop_ptr();
 
 		if (Atomics.load(memory, shouldStopPtr)) {	
-			postMessage({ type: 'memory', memory, shouldStopPtr });
-			
+			postMessage({ type: 'postInit', memory, shouldStopPtr });
+
 			Atomics.store(memory, shouldStopPtr, false);
-			
+
 			wasm.instance.exports.run({ source: msg.source, length: msg.source.length});
+
+			Atomics.store(memory, shouldStopPtr, true);
 		}
 	}
 }
