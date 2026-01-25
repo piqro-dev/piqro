@@ -37,4 +37,4 @@
 
 #define MAX(a, b) (__builtin_elementwise_max((a), (b)))
 
-#define SWAP(a, b) do { auto __c__ = (a); (a) = (b); (b) = __c__; } while (0)
+#define SWAP(a, b) do { auto __c__ = *(a); *(a) = *(b); *(b) = __c__; } while (0)

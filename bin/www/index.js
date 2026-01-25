@@ -8,7 +8,7 @@ let module = null;
 
 let memory = null;
 let shouldStopPtr = null;
-let canvas = null;
+let canvasBuffer = null;
 
 const ctx = document.getElementById('main-canvas').getContext('2d');
 
@@ -33,11 +33,7 @@ WebAssembly.compileStreaming(fetch('piqro.wasm')).then(function(m) {
 		}
 	
 		if (msg.type == 'canvas') {
-			canvas = {
-				forePtr: msg.forePtr,
-				backPtr: msg.backPtr,
-				idxPtr: msg.idxPtr,
-			}
+			canvasBuffer = msg.buffer;
 		}
 	}
 	
@@ -56,22 +52,19 @@ WebAssembly.compileStreaming(fetch('piqro.wasm')).then(function(m) {
 	worker.postMessage({ type: 'init', module: module });
 
 	function renderCanvas() {
-		if (canvas) {
-			const idx = memory[canvas.idxPtr];
-			const buffer = idx == 0 ? canvas.backPtr : canvas.forePtr;
-
+		if (canvasBuffer) {
 			let rgba = new Uint8ClampedArray(CANVAS_WIDTH * CANVAS_HEIGHT * 4);
-
+	
 			for (let i = 0; i < CANVAS_WIDTH * CANVAS_HEIGHT * 4; i += 4) {
-				rgba[i + 0] = memory[buffer + (i / 4)];
-				rgba[i + 1] = memory[buffer + (i / 4)];
-				rgba[i + 2] = memory[buffer + (i / 4)];
+				rgba[i + 0] = memory[canvasBuffer + (i / 4)];
+				rgba[i + 1] = memory[canvasBuffer + (i / 4)];
+				rgba[i + 2] = memory[canvasBuffer + (i / 4)];
 				rgba[i + 3] = 0xff;
 			}
-
+	
 			createImageBitmap(new ImageData(rgba, CANVAS_WIDTH, CANVAS_HEIGHT)).then(function(img) {
 				ctx.drawImage(img, 0, 0);
-			});
+			});	
 		}
 
 		requestAnimationFrame(renderCanvas);

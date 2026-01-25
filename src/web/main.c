@@ -52,6 +52,80 @@ static void vm_error_fn(const char* what)
 	js_post_message(msg);
 }
 
+static void dump_procedures(PQ_Compiler* c)
+{
+	printf("Procedures:\n");
+
+	for (uint16_t i = 0; i < c->procedure_count; i++)
+	{
+		PQ_Procedure p = c->procedures[i];
+
+		printf("  name: %.*s\n", s_fmt(p.name));
+		printf("  idx: %d\n", p.idx);
+		printf("  local_count: %d\n", p.local_count);
+		printf("  arg_count: %d\n", p.arg_count);
+		printf("  first_inst: %d\n", p.scope.first_inst);
+		printf("  foreign: %s\n", p.foreign ? "true" : "false");
+	
+		printf("\n");
+	}
+}
+
+static void dump_instructions(PQ_Compiler* c)
+{
+	Scratch scratch = scratch_make(c->arena);
+
+	for (uint16_t i = 0; i < c->instruction_count; i++)
+	{
+		PQ_Instruction it = c->instructions[i];
+
+		if (pq_inst_needs_arg(it.type))
+		{
+			if (it.type == INST_CALL)
+			{
+				printf("  %-4d | %-25s %d (%.*s)\n", i, pq_inst_to_c_str(it.type), it.arg, s_fmt(c->procedures[it.arg].name));
+			}
+			else if (it.type == INST_LOAD_IMMEDIATE)
+			{
+				printf("  %-4d | %-25s %d (%.*s)\n", i, pq_inst_to_c_str(it.type), it.arg, s_fmt(pq_value_as_string(scratch.arena, c->immediates[it.arg])));
+			}
+			else
+			{
+				printf("  %-4d | %-25s %d\n", i, pq_inst_to_c_str(it.type), it.arg);
+			}
+		}
+		else
+		{
+			printf("  %-4d | %-25s\n", i, pq_inst_to_c_str(it.type));
+		}
+	}
+
+	scratch_release(scratch);
+}
+
+void dump_stack(PQ_VM* vm)
+{
+	printf("Stack:\n");
+
+	if (vm->stack_size > 0)
+	{
+		Scratch scratch = scratch_make(vm->arena);
+
+		for (uint8_t i = 0; i < vm->stack_size; i++)
+		{
+			String v = pq_value_as_string(scratch.arena, vm->stack[i]);
+
+			printf("   [%d] %.*s, %s\n", i, s_fmt(v), pq_value_to_c_str(vm->stack[i].type));
+		}
+
+		scratch_release(scratch);
+	}
+	else
+	{
+		printf("   (empty)\n");
+	}
+}
+
 //
 // web interface
 //
@@ -119,18 +193,21 @@ void run(__externref_t e)
 		return;
 	}
 
+	dump_procedures(&c);
+	dump_instructions(&c);
+
 	{
 		__externref_t msg = js_obj();
 
 		js_set_string(msg, "type", "canvas");
-		js_set_int(msg, "forePtr", (intptr_t)rt.canvas.fore_buffer);
-		js_set_int(msg, "backPtr", (intptr_t)rt.canvas.back_buffer);
-		js_set_int(msg, "idxPtr", (intptr_t)&rt.canvas.frame_idx);
+		js_set_int(msg, "buffer", (intptr_t)rt.canvas.frame_buffer);
 
 		js_post_message(msg);
 	}
 
 	PQ_VM vm = {};
+
+	printf("Blob size: %d", b.size);
 	
 	pq_vm_init(&vm, &rt_arena, &b, vm_error_fn);
 	rt_bind_procedures(&vm);

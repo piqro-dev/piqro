@@ -76,7 +76,7 @@ void dump_stack(PQ_VM* vm)
 	}
 }
 
-void dump_procedures(PQ_Compiler* c)
+static void dump_procedures(PQ_Compiler* c)
 {
 	printf("Procedures:\n");
 
@@ -88,19 +88,20 @@ void dump_procedures(PQ_Compiler* c)
 		printf("  idx: %d\n", p.idx);
 		printf("  local_count: %d\n", p.local_count);
 		printf("  arg_count: %d\n", p.arg_count);
+		printf("  first_inst: %d\n", p.scope.first_inst);
 		printf("  foreign: %s\n", p.foreign ? "true" : "false");
 	
 		printf("\n");
 	}
 }
 
-void dump_all_instructions(PQ_Compiler* c, PQ_VM* vm)
+static void dump_instructions(PQ_Compiler* c)
 {
 	Scratch scratch = scratch_make(c->arena);
 
-	for (uint16_t i = 0; i < vm->instruction_count; i++)
+	for (uint16_t i = 0; i < c->instruction_count; i++)
 	{
-		PQ_Instruction it = vm->instructions[i];
+		PQ_Instruction it = c->instructions[i];
 
 		if (pq_inst_needs_arg(it.type))
 		{
@@ -116,6 +117,10 @@ void dump_all_instructions(PQ_Compiler* c, PQ_VM* vm)
 			{
 				printf("  %-4d | %-25s %d\n", i, pq_inst_to_c_str(it.type), it.arg);
 			}
+		}
+		else
+		{
+			printf("  %-4d | %-25s\n", i, pq_inst_to_c_str(it.type));
 		}
 	}
 
@@ -208,6 +213,8 @@ int main()
 
 	PQ_VM vm = {};
 
+	dump_instructions(&c);
+
 	{
 		pq_vm_init(&vm, &vm_arena, &b, vm_error_fn);
 	
@@ -215,12 +222,7 @@ int main()
 		pq_vm_bind_foreign_proc(&vm, s("sin"), sin_proc);
 		pq_vm_bind_foreign_proc(&vm, s("test"), test_proc);
 	
-		bool r = true;
-	
-		while (r)
-		{
-			r = pq_execute(&vm); 
-		}
+		while (pq_execute(&vm)) {}
 	}
 }
 

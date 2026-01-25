@@ -36,6 +36,7 @@ const env = {
 	// libc
 	//
 	
+	putchar(c)   { console.log(String.fromCharCode(c)); },
 	puts(text)   { console.log(decode(text)); },
 	atof(x)      { return Number(decode(x)); },
 	

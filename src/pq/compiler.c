@@ -1416,19 +1416,19 @@ static void emit_repeat_statement(PQ_Compiler* c)
 	emit_expression(c);
 
 	PQ_Loop loop = {};
-	
+
+	String name = str_format(c->arena, "__repeat_local_%d", c->instruction_count);
+
+	loop.local = get_or_create_variable(c, name);
+
 	// {
 	begin_scope(c, &loop.scope);
 
-	String name = str_format(c->arena, "__repeat_local_%d", loop.scope.local_base);
-
-	loop.local = get_or_create_variable(c, name)->idx;
-
 	// repeat_local = <expr>
-	push_inst(c, (PQ_Instruction){ INST_STORE_LOCAL, loop.local });
+	push_inst(c, (PQ_Instruction){ INST_STORE_LOCAL, loop.local->idx });
 
 	// repeat_local >= 0
-	push_inst(c, (PQ_Instruction){ INST_LOAD_LOCAL, loop.local });
+	push_inst(c, (PQ_Instruction){ INST_LOAD_LOCAL, loop.local->idx });
 	push_inst(c, (PQ_Instruction){ INST_LOAD_IMMEDIATE, get_or_create_immediate(c, pq_value_number(0.0f)) });
 	push_inst(c, (PQ_Instruction){ INST_LESS_THAN });
 
@@ -1436,10 +1436,10 @@ static void emit_repeat_statement(PQ_Compiler* c)
 	PQ_Instruction* jump_cond = push_inst(c, (PQ_Instruction){ INST_JUMP_COND });
 
 	// repeat_local = repeat_local - 1
-	push_inst(c, (PQ_Instruction){ INST_LOAD_LOCAL, loop.local });
+	push_inst(c, (PQ_Instruction){ INST_LOAD_LOCAL, loop.local->idx });
 	push_inst(c, (PQ_Instruction){ INST_LOAD_IMMEDIATE, get_or_create_immediate(c, pq_value_number(1.0f)) });
 	push_inst(c, (PQ_Instruction){ INST_SUB });
-	push_inst(c, (PQ_Instruction){ INST_STORE_LOCAL, loop.local });
+	push_inst(c, (PQ_Instruction){ INST_STORE_LOCAL, loop.local->idx });
 
 	c->current_loop = &loop;
 
@@ -1481,7 +1481,7 @@ static void emit_repeat_until_statement(PQ_Compiler* c)
 
 	loop.scope.first_inst = start;
 
-	// is <expr> true? Skip the loop
+	// true? skip the loop
 	PQ_Instruction* jump_cond = push_inst(c, (PQ_Instruction){ INST_JUMP_COND });
 
 	c->current_loop = &loop;

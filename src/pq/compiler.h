@@ -29,13 +29,6 @@ struct PQ_Procedure
 	PQ_Scope scope;
 };
 
-typedef struct PQ_Loop PQ_Loop;
-struct PQ_Loop
-{
-	uint16_t local;
-	PQ_Scope scope;
-};
-
 typedef struct PQ_Variable PQ_Variable;
 struct PQ_Variable
 {
@@ -47,6 +40,13 @@ struct PQ_Variable
 
 	bool arg;
 	bool global;
+};
+
+typedef struct PQ_Loop PQ_Loop;
+struct PQ_Loop
+{
+	PQ_Variable* local;
+	PQ_Scope scope;
 };
 
 typedef void (*PQ_CompilerErrorFn)(uint16_t, const char*);

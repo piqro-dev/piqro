@@ -8,7 +8,7 @@ RT_Canvas rt_canvas_make(Arena* arena, uint16_t width, uint16_t height)
 	c.height = height;
 
 	c.back_buffer = arena_push_array(arena, uint8_t, c.width * c.height);
-	c.fore_buffer = arena_push_array(arena, uint8_t, c.width * c.height);
+	c.frame_buffer = arena_push_array(arena, uint8_t, c.width * c.height);
 
 	c.back_color = 0x00;
 	c.fore_color = 0xff;
@@ -25,8 +25,47 @@ void rt_canvas_clear(RT_Canvas* c)
 
 void rt_canvas_present(RT_Canvas* c)
 {
-	c->frame_idx ^= 1;
-	SWAP(c->fore_buffer, c->back_buffer);
+	__builtin_memcpy(c->frame_buffer, c->back_buffer, c->width * c->height);
+}
+
+void rt_canvas_line(RT_Canvas* c, int16_t x0, int16_t y0, int16_t x1, int16_t y1)
+{
+	int16_t dx = __builtin_abs(x1 - x0);
+	int16_t sx = x0 < x1 ? 1 : -1;
+
+	int16_t dy = -__builtin_abs(y1 - y0);
+	int16_t sy = y0 < y1 ? 1 : -1;
+
+	int16_t error = dx + dy;
+
+	for (;;) 
+	{
+		rt_canvas_put(c, x0, y0);
+
+		int16_t e2 = 2 * error;
+	
+		if (e2 >= dy)
+		{
+			if (x0 == x1)
+			{
+				break;
+			}
+
+			error += dy;
+			x0 += sx;
+		}
+
+		if (e2 <= dx)
+		{
+			if (y0 == y1)
+			{
+				break;
+			}
+
+			error += dx;
+			y0 += sy;
+		}
+	}
 }
 
 void rt_canvas_rect(RT_Canvas* c, int16_t x, int16_t y, int16_t w, int16_t h)
@@ -35,10 +74,7 @@ void rt_canvas_rect(RT_Canvas* c, int16_t x, int16_t y, int16_t w, int16_t h)
 	{
 		for (int16_t j = y; j < y + h; j++) 
 		{
-			if (i >= 0 && j >= 0 && i < c->width && j < c->height)
-			{
-				c->back_buffer[i + j * c->width] = c->fore_color;
-			}
+			rt_canvas_put(c, i, j);
 		}
 	}
 }

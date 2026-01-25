@@ -20,6 +20,23 @@ static RT_State* state;
 		\
 		pq_vm_return(vm); \
 	}) \
+	PROC(present, 0, \
+	{ \
+		rt_canvas_present(&state->canvas); \
+		\
+		pq_vm_return(vm); \
+	}) \
+	PROC(line, 4, \
+	{ \
+		int16_t x0 = pq_value_as_number(pq_vm_get_local(vm, 0)); \
+		int16_t y0 = pq_value_as_number(pq_vm_get_local(vm, 1)); \
+		int16_t x1 = pq_value_as_number(pq_vm_get_local(vm, 2)); \
+		int16_t y1 = pq_value_as_number(pq_vm_get_local(vm, 3)); \
+		\
+		rt_canvas_line(&state->canvas, x0, y0, x1, y1); \
+		\
+		pq_vm_return(vm); \
+	}) \
 	PROC(rect, 4, \
 	{ \
 		int16_t x = pq_value_as_number(pq_vm_get_local(vm, 0)); \
@@ -37,12 +54,6 @@ static RT_State* state;
 		int16_t y = pq_value_as_number(pq_vm_get_local(vm, 1)); \
 		\
 		rt_canvas_put(&state->canvas, x, y); \
-		\
-		pq_vm_return(vm); \
-	}) \
-	PROC(present, 0, \
-	{ \
-		rt_canvas_present(&state->canvas); \
 		\
 		pq_vm_return(vm); \
 	}) \
