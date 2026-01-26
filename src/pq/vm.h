@@ -11,9 +11,9 @@ typedef struct PQ_CallFrame PQ_CallFrame;
 struct PQ_CallFrame
 {
 	uint16_t return_ip;
-	uint16_t stack_base;
-	uint16_t local_count;
-	uint16_t arg_count;
+
+	uint8_t stack_base;
+	uint8_t local_base;
 
 	Scratch scratch;
 };
@@ -27,6 +27,7 @@ struct PQ_ProcedureInfo
 
 	uint8_t local_count;
 	uint8_t arg_count;
+
 	uint16_t first_inst;
 
 	String foreign_name;

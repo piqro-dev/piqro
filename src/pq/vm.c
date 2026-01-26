@@ -166,7 +166,7 @@ static uint8_t get_local_idx(PQ_VM* vm, uint8_t idx)
 	{
 		const PQ_CallFrame* cf = &vm->call_frames[vm->call_frame_count - 1];
 
-		idx = vm->local_count - (cf->local_count + cf->arg_count) + idx;
+		idx = cf->local_base + idx;
 	}
 
 	return idx;
@@ -179,7 +179,7 @@ static void CALL(PQ_VM* vm, uint16_t idx)
 		VM_ERROR("Callee index out of bounds");
 	}
 
-	PQ_ProcedureInfo pi = vm->proc_infos[idx];
+	const PQ_ProcedureInfo* pi = &vm->proc_infos[idx];
 
 	if (vm->call_frame_count >= PQ_MAX_CALL_FRAMES)
 	{
@@ -188,34 +188,31 @@ static void CALL(PQ_VM* vm, uint16_t idx)
 
 	PQ_CallFrame* cf = &vm->call_frames[vm->call_frame_count++];
 
-	cf->scratch = scratch_make(vm->arena);
-
 	cf->return_ip = vm->ip + 1;
-	
-	cf->arg_count = pi.arg_count;
-	cf->local_count = pi.local_count;
-
-	// for convenience, we pop the arguments off the stack in reversed order
-	for (uint8_t i = 0; i < cf->arg_count; i++) 
-	{
-		VERIFY_STACK_UNDERFLOW();
-		
-		vm->locals[(vm->local_count + cf->arg_count - 1) - i] = vm->stack[--vm->stack_size];
-	}
+	cf->local_base = vm->local_count;
+	cf->scratch = scratch_make(vm->arena);
 
 	if (vm->local_count >= PQ_MAX_LOCALS)
 	{
 		VM_ERROR("Local overflow");
 	}
 
-	vm->local_count += cf->arg_count + cf->local_count;
+	vm->local_count += pi->arg_count;
+
+	// for convenience, we pop the arguments off the stack in reversed order
+	for (uint8_t i = 0; i < pi->arg_count; i++) 
+	{
+		VERIFY_STACK_UNDERFLOW();
+		
+		vm->locals[(vm->local_count - 1) - i] = vm->stack[--vm->stack_size];
+	}
 
 	cf->stack_base = vm->stack_size;
 	
-	if (!pi.foreign)
+	if (!pi->foreign)
 	{
 		// push locals found in procedure
-		for (uint8_t i = cf->arg_count; i < cf->local_count; i++) 
+		for (uint8_t i = 0; i < pi->local_count; i++) 
 		{
 			if (vm->local_count >= PQ_MAX_LOCALS)
 			{
@@ -225,7 +222,7 @@ static void CALL(PQ_VM* vm, uint16_t idx)
 			vm->locals[vm->local_count++] = pq_value_null();
 		}
 		
-		vm->ip = pi.first_inst;
+		vm->ip = pi->first_inst;
 	}
 	// foreign procedures use a different calling "convention".
 	//
@@ -234,12 +231,12 @@ static void CALL(PQ_VM* vm, uint16_t idx)
 	// and move on
 	else
 	{
-		if (!pi.proc)
+		if (!pi->proc)
 		{
-			VM_ERROR("Undefined foreign procedure '%.*s'", s_fmt(pi.foreign_name));
+			VM_ERROR("Undefined foreign procedure '%.*s'", s_fmt(pi->foreign_name));
 		}
 
-		pi.proc(vm);
+		pi->proc(vm);
 
 		VERIFY_STACK_UNDERFLOW();
 
@@ -253,13 +250,7 @@ static void CALL(PQ_VM* vm, uint16_t idx)
 		PQ_CallFrame cf = vm->call_frames[--vm->call_frame_count];
 
 		vm->stack_size = cf.stack_base;
-
-		if (((int32_t)vm->local_count - (cf.local_count + cf.arg_count)) < 0)
-		{
-			VM_ERROR("Local underflow");
-		}
-
-		vm->local_count -= cf.local_count + cf.arg_count;
+		vm->local_count = cf.local_base;
 
 		if (ret.type == VALUE_ARRAY)
 		{
@@ -651,13 +642,7 @@ static void RETURN(PQ_VM* vm)
 	PQ_CallFrame cf = vm->call_frames[--vm->call_frame_count];	
 
 	vm->stack_size = cf.stack_base;
-
-	if (((int32_t)vm->local_count - (cf.local_count + cf.arg_count)) < 0)
-	{
-		VM_ERROR("Local underflow");
-	}
-
-	vm->local_count -= cf.local_count + cf.arg_count;
+	vm->local_count = cf.local_base;
 
 	if (ret.type == VALUE_ARRAY)
 	{

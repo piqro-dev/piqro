@@ -556,16 +556,31 @@ static PQ_Instruction* push_inst(PQ_Compiler* c, PQ_Instruction it)
 }
 
 static bool variable_exists(PQ_Compiler* c, String name)
-{
-	for (uint16_t i = 0; i < c->variable_count; i++)
+{	
+	if (c->current_scope)
 	{
-		if (str_equals(c->variables[i].name, name))
+		for (uint16_t i = 0; i < c->local_count; i++)
 		{
-			return true;
+			if (str_equals(c->locals[i].name, name))
+			{
+				return true;
+			}
 		}
+		
+		return false;
 	}
-
-	return false;
+	else
+	{
+		for (uint16_t i = 0; i < c->global_count; i++)
+		{
+			if (str_equals(c->globals[i].name, name))
+			{
+				return true;
+			}
+		}
+		
+		return false;
+	}
 }
 
 static bool procedure_exists(PQ_Compiler* c, String name)
@@ -601,29 +616,42 @@ static PQ_Procedure* get_or_create_procedure(PQ_Compiler* c, String name)
 
 static PQ_Variable* get_or_create_variable(PQ_Compiler* c, String name)
 {
-	for (uint16_t i = 0; i < c->variable_count; i++)
+	if (c->current_scope)
 	{
-		if (str_equals(c->variables[i].name, name))
+		for (uint16_t i = 0; i < c->local_count; i++)
 		{
-			return &c->variables[i];
+			if (str_equals(c->locals[i].name, name))
+			{
+				return &c->locals[i];
+			}
 		}
+
+		PQ_Variable* var = &c->locals[c->local_count++];
+		
+		var->name = name;
+		var->idx = c->local_count - 1;
+		var->global = false;
+
+		return var;
 	}
-
-	PQ_Variable* var = &c->variables[c->variable_count++];
-
-	var->name = name; 
-	var->idx = c->variable_count - 1;
-	
-	var->arg = false;
-	var->array = false;
-	var->global = false;
-
-	if (!c->current_proc && !c->current_scope)
+	else
 	{
-		var->global = true;
-	}
+		for (uint16_t i = 0; i < c->global_count; i++)
+		{
+			if (str_equals(c->globals[i].name, name))
+			{
+				return &c->globals[i];
+			}
+		}
 
-	return var;
+		PQ_Variable* var = &c->globals[c->global_count++];
+		
+		var->name = name;
+		var->idx = c->global_count - 1;
+		var->global = true;
+
+		return var;
+	}
 }
 
 static uint16_t get_or_create_immediate(PQ_Compiler* c, PQ_Value v)
@@ -915,11 +943,6 @@ static void emit_array_element_expression(PQ_Compiler* c)
 
 	PQ_Variable* var = get_or_create_variable(c, name);
 
-	if (!var->array && !var->arg)
-	{
-		C_ERROR("Tried indexing non-array identifier '%.*s'", s_fmt(name));
-	}
-
 	uint16_t start = c->instruction_count;
 	
 	// [
@@ -1066,30 +1089,32 @@ static void emit_expression(PQ_Compiler* c)
 
 static void begin_scope(PQ_Compiler* c, PQ_Scope* scope) 
 {
-	// {
-	try_eat_token(c, TOKEN_OPEN_BRACE);
-
 	scope->first_inst = c->instruction_count;
-	scope->local_base = c->variable_count;
+
+	scope->local_base = c->local_count;
+
+	scope->previous = c->current_scope;
 
 	c->current_scope = scope;
 }
 
 static void end_scope(PQ_Compiler* c, PQ_Scope* scope) 
 {
-	// }
-	try_eat_token(c, TOKEN_CLOSE_BRACE);
-
 	scope->last_inst = c->instruction_count;
 
-	c->variable_count = scope->local_base;
+	c->current_scope = scope->previous;
 
-	c->current_scope = nullptr;
+	if (!c->current_scope)
+	{
+		c->local_count = scope->local_base;
+	}
 }
 
 static void emit_scope(PQ_Compiler* c)
 {
 	PQ_Scope scope = {};
+
+	try_eat_token(c, TOKEN_OPEN_BRACE);
 
 	begin_scope(c, &scope);
 
@@ -1097,6 +1122,8 @@ static void emit_scope(PQ_Compiler* c)
 	{
 		emit_statement(c);
 	}
+	
+	try_eat_token(c, TOKEN_CLOSE_BRACE);
 
 	end_scope(c, &scope);
 }
@@ -1126,12 +1153,6 @@ static void emit_var_statement(PQ_Compiler* c)
 	}
 
 	PQ_Variable* var = get_or_create_variable(c, name);
-
-	// variables local to procedures get their index redefined
-	if (c->current_proc && c->current_scope == &c->current_proc->scope) 
-	{
-		var->idx = c->current_proc->arg_count + c->current_proc->local_count++;
-	}
 
 	// [
 	if (peek_token(c, 0).type == TOKEN_OPEN_BOX)
@@ -1287,12 +1308,22 @@ static void emit_define_statement(PQ_Compiler* c)
 		C_ERROR("Cannot define procedure inside another one");
 	}
 
+	if (c->current_scope)
+	{
+		C_ERROR("Cannot define procedure inside a scope");
+	}
+
 	PQ_Procedure* proc = get_or_create_procedure(c, name);
 
 	c->current_proc = proc;
 
 	// (
 	PQ_Token open = try_eat_token(c, TOKEN_OPEN_PAREN);
+
+	// skip the function body
+	PQ_Instruction* jump = push_inst(c, (PQ_Instruction){ INST_JUMP });
+	
+	begin_scope(c, &proc->scope);
 
 	// <ident>, <ident>...
 	while (peek_token(c, 0).type != TOKEN_CLOSE_PAREN)
@@ -1310,13 +1341,12 @@ static void emit_define_statement(PQ_Compiler* c)
 
 		if (variable_exists(c, name))
 		{
-			C_ERROR("Argument/variable redefinition in procedure definition");
+			C_ERROR("Argument identifier '%.*s' redefined in procedure definition", s_fmt(name));
 		}
 
 		PQ_Variable* var = get_or_create_variable(c, name);
 
-		var->idx = proc->arg_count++;
-		var->arg = true;
+		proc->arg_count++;
 
 		if (peek_token(c, 0).type != TOKEN_CLOSE_PAREN)
 		{
@@ -1334,14 +1364,8 @@ static void emit_define_statement(PQ_Compiler* c)
 	// )
 	try_eat_token(c, TOKEN_CLOSE_PAREN);
 
-	// skip the function body
-	PQ_Instruction* jump = push_inst(c, (PQ_Instruction){ INST_JUMP });
-
 	// {
-	begin_scope(c, &proc->scope);
-
-	// move the local index back to the first argument
-	proc->scope.local_base -= proc->arg_count;
+	try_eat_token(c, TOKEN_OPEN_BRACE);
 
 	// { ... }
 	while (peek_token(c, 0).type != TOKEN_CLOSE_BRACE)
@@ -1359,6 +1383,8 @@ static void emit_define_statement(PQ_Compiler* c)
 	}
 	
 	// }
+	try_eat_token(c, TOKEN_CLOSE_BRACE);
+
 	end_scope(c, &proc->scope);
 
 	c->current_proc = nullptr;
@@ -1397,110 +1423,15 @@ static void patch_breaks(PQ_Compiler* c, const PQ_Loop* loop)
 	}
 }
 
-//
-// the statement `repeat <expr> { ... }` replicates the equivalent of this C code:
-//
-// int repeat_local = <expr>;
-//
-// while (--repeat_local >= 0) 
-// {
-//   <...>
-// }
-// 
 static void emit_repeat_statement(PQ_Compiler* c)
 {
-	// repeat
-	eat_token(c);
-
-	// <expr>
-	emit_expression(c);
-
-	PQ_Loop loop = {};
-
-	String name = str_format(c->arena, "__repeat_local_%d", c->instruction_count);
-
-	loop.local = get_or_create_variable(c, name);
-
-	// {
-	begin_scope(c, &loop.scope);
-
-	// repeat_local = <expr>
-	push_inst(c, (PQ_Instruction){ INST_STORE_LOCAL, loop.local->idx });
-
-	// repeat_local >= 0
-	push_inst(c, (PQ_Instruction){ INST_LOAD_LOCAL, loop.local->idx });
-	push_inst(c, (PQ_Instruction){ INST_LOAD_IMMEDIATE, get_or_create_immediate(c, pq_value_number(0.0f)) });
-	push_inst(c, (PQ_Instruction){ INST_LESS_THAN });
-
-	// true? skip the loop
-	PQ_Instruction* jump_cond = push_inst(c, (PQ_Instruction){ INST_JUMP_COND });
-
-	// repeat_local = repeat_local - 1
-	push_inst(c, (PQ_Instruction){ INST_LOAD_LOCAL, loop.local->idx });
-	push_inst(c, (PQ_Instruction){ INST_LOAD_IMMEDIATE, get_or_create_immediate(c, pq_value_number(1.0f)) });
-	push_inst(c, (PQ_Instruction){ INST_SUB });
-	push_inst(c, (PQ_Instruction){ INST_STORE_LOCAL, loop.local->idx });
-
-	c->current_loop = &loop;
-
-	while (peek_token(c, 0).type != TOKEN_CLOSE_BRACE)
-	{
-		emit_statement(c);
-	}
-
-	c->current_loop = nullptr;
-
-	end_scope(c, &loop.scope);
-
-	push_inst(c, (PQ_Instruction){ INST_JUMP, loop.scope.first_inst + 1 });
-
-	jump_cond->arg = loop.scope.last_inst + 1; // last statement + the jump
-
-	// patch breaks
-	patch_breaks(c, &loop);
+	C_ERROR("`repeat` is not implemented at the moment");
 }
 
 // repeat until <expr> { ... }
 static void emit_repeat_until_statement(PQ_Compiler* c) 
 {
-	// repeat
-	eat_token(c);
-
-	// until
-	eat_token(c);
-
-	PQ_Loop loop = {};
-
-	uint16_t start = c->instruction_count;
-
-	// <expr>
-	emit_expression(c);
-	
-	// {
-	begin_scope(c, &loop.scope);
-
-	loop.scope.first_inst = start;
-
-	// true? skip the loop
-	PQ_Instruction* jump_cond = push_inst(c, (PQ_Instruction){ INST_JUMP_COND });
-
-	c->current_loop = &loop;
-
-	while (peek_token(c, 0).type != TOKEN_CLOSE_BRACE)
-	{
-		emit_statement(c);
-	}
-
-	c->current_loop = nullptr;
-
-	end_scope(c, &loop.scope);
-
-	push_inst(c, (PQ_Instruction){ INST_JUMP, loop.scope.first_inst });
-
-	jump_cond->arg = loop.scope.last_inst + 1; // last statement + the jump
-
-	// patch breaks
-	patch_breaks(c, &loop);
+	C_ERROR("`repeat until` is not implemented at the moment");
 }
 
 // forever { ... }
@@ -1511,8 +1442,10 @@ static void emit_forever_statement(PQ_Compiler* c)
 
 	PQ_Loop loop = {};
 
-	// {
 	begin_scope(c, &loop.scope);
+	
+	// {
+	try_eat_token(c, TOKEN_OPEN_BRACE);
 	
 	c->current_loop = &loop;
 
@@ -1525,6 +1458,8 @@ static void emit_forever_statement(PQ_Compiler* c)
 	c->current_loop = nullptr;
 
 	// }
+	try_eat_token(c, TOKEN_CLOSE_BRACE);
+
 	end_scope(c, &loop.scope);
 
 	push_inst(c, (PQ_Instruction){ INST_JUMP, loop.scope.first_inst });
@@ -1555,6 +1490,8 @@ static void emit_if_statement(PQ_Compiler* c)
 	PQ_Scope scope = {};
 
 	// {
+	try_eat_token(c, TOKEN_OPEN_BRACE);
+
 	begin_scope(c, &scope);
 
 	// Statements
@@ -1564,6 +1501,8 @@ static void emit_if_statement(PQ_Compiler* c)
 	}
  
 	// }
+	try_eat_token(c, TOKEN_CLOSE_BRACE);
+	
 	end_scope(c, &scope);
 
 	// this jumps to the end of this block if <expr> == false (therefore, not executing this block).
@@ -1607,8 +1546,10 @@ static void emit_else_if_statement(PQ_Compiler* c)
 
 	PQ_Scope scope = {};
 
-	// {
 	begin_scope(c, &scope);
+	
+	// {
+	try_eat_token(c, TOKEN_OPEN_BRACE);
 
 	// Statements
 	while (peek_token(c, 0).type != TOKEN_CLOSE_BRACE)
@@ -1617,6 +1558,8 @@ static void emit_else_if_statement(PQ_Compiler* c)
 	}
 
 	// }
+	try_eat_token(c, TOKEN_CLOSE_BRACE);
+
 	end_scope(c, &scope);
 
 	// this jumps to the end of this block if the last block was executed. 
@@ -1652,6 +1595,8 @@ static void emit_else_statement(PQ_Compiler* c)
 	PQ_Scope scope = {};
 	
 	// {
+	try_eat_token(c, TOKEN_OPEN_BRACE);
+
 	begin_scope(c, &scope);
 
 	// Statements
@@ -1661,6 +1606,8 @@ static void emit_else_statement(PQ_Compiler* c)
 	}
 
 	// }
+	try_eat_token(c, TOKEN_CLOSE_BRACE);
+
 	end_scope(c, &scope);
 
 	jump->arg = scope.last_inst;
@@ -1871,8 +1818,11 @@ void pq_compiler_init(PQ_Compiler* c, Arena* arena, String source, PQ_CompilerEr
 	c->procedures = arena_push_array(c->arena, PQ_Procedure, PQ_MAX_PROCEDURES);
 	c->procedure_count = 0;
 
-	c->variables = arena_push_array(c->arena, PQ_Variable, PQ_MAX_VARIABLES);
-	c->variable_count = 0;
+	c->locals = arena_push_array(c->arena, PQ_Variable, PQ_MAX_LOCALS);
+	c->local_count = 0;
+
+	c->globals = arena_push_array(c->arena, PQ_Variable, PQ_MAX_GLOBALS);
+	c->global_count = 0;
 
 	c->current_scope = nullptr;
 	c->current_proc = nullptr;
@@ -1966,17 +1916,7 @@ static void write_procedures(PQ_Compiler* c, PQ_CompiledBlob* b)
 
 static void write_global_count(PQ_Compiler* c, PQ_CompiledBlob* b)
 {
-	uint16_t count = 0;
-
-	for (uint16_t i = 0; i < c->variable_count; i++)
-	{
-		if (c->variables[i].global)
-		{
-			count++;
-		}
-	}
-
-	write_to_blob(&count, b, sizeof(uint16_t));
+	write_to_blob(&c->global_count, b, sizeof(uint16_t));
 }
 
 static void write_instructions(PQ_Compiler* c, PQ_CompiledBlob* b)

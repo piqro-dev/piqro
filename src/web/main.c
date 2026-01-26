@@ -193,9 +193,6 @@ void run(__externref_t e)
 		return;
 	}
 
-	dump_procedures(&c);
-	dump_instructions(&c);
-
 	{
 		__externref_t msg = js_obj();
 

@@ -13,7 +13,10 @@ let canvasBuffer = null;
 const ctx = document.getElementById('main-canvas').getContext('2d');
 
 ctx.fillStyle = 'black';
+ctx.imageSmoothingEnabled = false;
+
 ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+ctx.scale(2, 2);
 
 WebAssembly.compileStreaming(fetch('piqro.wasm')).then(function(m) {
 	module = m;
@@ -67,7 +70,9 @@ WebAssembly.compileStreaming(fetch('piqro.wasm')).then(function(m) {
 			});	
 		}
 
-		requestAnimationFrame(renderCanvas);
+		setTimeout(function() {
+			requestAnimationFrame(renderCanvas);
+		}, 1000.0 / 30.0);
 	}
 
 	renderCanvas();

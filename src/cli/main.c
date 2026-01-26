@@ -150,14 +150,7 @@ void dump_instruction(PQ_Compiler* c, PQ_VM* vm)
 
 void dump_global_count(PQ_Compiler* c)
 {
-	uint16_t count = 0;
-
-	for (uint16_t i = 0; i < c->variable_count; i++)
-	{
-		count++;
-	}
-
-	printf("global count: %d\n", count);
+	printf("global count: %d\n", c->global_count);
 	printf("\n");
 }
 
@@ -213,6 +206,7 @@ int main()
 
 	PQ_VM vm = {};
 
+	dump_procedures(&c);
 	dump_instructions(&c);
 
 	{
@@ -222,7 +216,12 @@ int main()
 		pq_vm_bind_foreign_proc(&vm, s("sin"), sin_proc);
 		pq_vm_bind_foreign_proc(&vm, s("test"), test_proc);
 	
-		while (pq_execute(&vm)) {}
+		while (pq_execute(&vm)) 
+		{
+			//dump_instruction(&c, &vm);
+			//dump_state(&vm);
+			//dump_stack(&vm);
+		}
 	}
 }
 

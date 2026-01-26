@@ -9,19 +9,20 @@ typedef struct PQ_Scope PQ_Scope;
 struct PQ_Scope
 {
 	uint16_t first_inst; 
-	uint16_t last_inst;  
-	uint16_t local_base; 
+	uint16_t last_inst;
+	uint16_t local_base;
+
+	PQ_Scope* previous; 
 };
 
 typedef struct PQ_Procedure PQ_Procedure;
 struct PQ_Procedure
 {
 	String name;
-	
 	uint8_t idx;
 
-	uint16_t local_count;
-	uint16_t arg_count;
+	uint8_t local_count;
+	uint8_t arg_count;
 
 	bool used;
 	bool foreign;
@@ -35,17 +36,15 @@ struct PQ_Variable
 	String name;
 	uint8_t idx;
 
+	bool global;
+
 	bool array;
 	uint16_t array_size;
-
-	bool arg;
-	bool global;
 };
 
 typedef struct PQ_Loop PQ_Loop;
 struct PQ_Loop
 {
-	PQ_Variable* local;
 	PQ_Scope scope;
 };
 
@@ -72,8 +71,11 @@ struct PQ_Compiler
 	PQ_Procedure* procedures;
 	uint16_t procedure_count;
 
-	PQ_Variable* variables;
-	uint16_t variable_count;
+	PQ_Variable* globals;
+	uint16_t global_count;
+
+	PQ_Variable* locals;
+	uint16_t local_count;
 
 	PQ_Scope* current_scope;
 	PQ_Procedure* current_proc;
