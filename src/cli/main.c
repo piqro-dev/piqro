@@ -113,6 +113,14 @@ static void dump_instructions(PQ_Compiler* c)
 			{
 				printf("  %-4d | %-25s %d (%.*s)\n", i, pq_inst_to_c_str(it.type), it.arg, s_fmt(pq_value_as_string(scratch.arena, c->immediates[it.arg])));
 			}
+			else if (it.type == INST_LOAD_GLOBAL)
+			{
+				printf("  %-4d | %-25s %d (%.*s)\n", i, pq_inst_to_c_str(it.type), it.arg, s_fmt(c->globals[it.arg].name));
+			}
+			else if (it.type == INST_STORE_GLOBAL)
+			{
+				printf("  %-4d | %-25s %d (%.*s)\n", i, pq_inst_to_c_str(it.type), it.arg, s_fmt(c->globals[it.arg].name));
+			}
 			else
 			{
 				printf("  %-4d | %-25s %d\n", i, pq_inst_to_c_str(it.type), it.arg);
@@ -131,11 +139,25 @@ void dump_instruction(PQ_Compiler* c, PQ_VM* vm)
 {
 	PQ_Instruction it = vm->instructions[vm->ip];
 
+	Scratch scratch = scratch_make(c->arena);
+	
 	if (pq_inst_needs_arg(it.type))
 	{
 		if (it.type == INST_CALL)
 		{
 			printf("\n-> %d | %-25s %d (%.*s)\n", vm->ip, pq_inst_to_c_str(it.type), it.arg, s_fmt(c->procedures[it.arg].name));
+		}
+		else if (it.type == INST_LOAD_IMMEDIATE)
+		{
+			printf("\n-> %d | %-25s %d (%.*s)\n", vm->ip, pq_inst_to_c_str(it.type), it.arg, s_fmt(pq_value_as_string(scratch.arena, c->immediates[it.arg])));
+		}
+		else if (it.type == INST_LOAD_GLOBAL)
+		{
+			printf("\n-> %d | %-25s %d (%.*s)\n", vm->ip, pq_inst_to_c_str(it.type), it.arg, s_fmt(c->globals[it.arg].name));
+		}
+		else if (it.type == INST_STORE_GLOBAL)
+		{
+			printf("\n-> %d | %-25s %d (%.*s)\n", vm->ip, pq_inst_to_c_str(it.type), it.arg, s_fmt(c->globals[it.arg].name));
 		}
 		else
 		{
@@ -146,6 +168,8 @@ void dump_instruction(PQ_Compiler* c, PQ_VM* vm)
 	{
 		printf("\n-> %d | %-25s\n", vm->ip, pq_inst_to_c_str(it.type));
 	}
+
+	scratch_release(scratch);
 }
 
 void dump_global_count(PQ_Compiler* c)
@@ -218,9 +242,9 @@ int main()
 	
 		while (pq_execute(&vm)) 
 		{
-			//dump_instruction(&c, &vm);
-			//dump_state(&vm);
-			//dump_stack(&vm);
+			dump_instruction(&c, &vm);
+			dump_state(&vm);
+			dump_stack(&vm);
 		}
 	}
 }

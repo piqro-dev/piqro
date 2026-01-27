@@ -557,30 +557,23 @@ static PQ_Instruction* push_inst(PQ_Compiler* c, PQ_Instruction it)
 
 static bool variable_exists(PQ_Compiler* c, String name)
 {	
-	if (c->current_scope)
+	for (uint16_t i = 0; i < c->local_count; i++)
 	{
-		for (uint16_t i = 0; i < c->local_count; i++)
+		if (str_equals(c->locals[i].name, name))
 		{
-			if (str_equals(c->locals[i].name, name))
-			{
-				return true;
-			}
+			return true;
 		}
-		
-		return false;
 	}
-	else
+		
+	for (uint16_t i = 0; i < c->global_count; i++)
 	{
-		for (uint16_t i = 0; i < c->global_count; i++)
+		if (str_equals(c->globals[i].name, name))
 		{
-			if (str_equals(c->globals[i].name, name))
-			{
-				return true;
-			}
+			return true;
 		}
-		
-		return false;
 	}
+		
+	return false;
 }
 
 static bool procedure_exists(PQ_Compiler* c, String name)
@@ -616,34 +609,34 @@ static PQ_Procedure* get_or_create_procedure(PQ_Compiler* c, String name)
 
 static PQ_Variable* get_or_create_variable(PQ_Compiler* c, String name)
 {
+	for (uint16_t i = 0; i < c->local_count; i++)
+	{
+		if (str_equals(c->locals[i].name, name))
+		{
+			return &c->locals[i];
+		}
+	}
+
+	for (uint16_t i = 0; i < c->global_count; i++)
+	{
+		if (str_equals(c->globals[i].name, name))
+		{
+			return &c->globals[i];
+		}
+	}
+
 	if (c->current_scope)
 	{
-		for (uint16_t i = 0; i < c->local_count; i++)
-		{
-			if (str_equals(c->locals[i].name, name))
-			{
-				return &c->locals[i];
-			}
-		}
-
 		PQ_Variable* var = &c->locals[c->local_count++];
-		
+			
 		var->name = name;
 		var->idx = c->local_count - 1;
 		var->global = false;
-
+		
 		return var;
 	}
 	else
 	{
-		for (uint16_t i = 0; i < c->global_count; i++)
-		{
-			if (str_equals(c->globals[i].name, name))
-			{
-				return &c->globals[i];
-			}
-		}
-
 		PQ_Variable* var = &c->globals[c->global_count++];
 		
 		var->name = name;
@@ -1423,15 +1416,115 @@ static void patch_breaks(PQ_Compiler* c, const PQ_Loop* loop)
 	}
 }
 
+//
+// the statement `repeat <expr> { ... }` replicates the equivalent of this C code:
+//
+// int repeat_local = <expr>;
+//
+// while (--repeat_local >= 0) 
+// {
+//   <...>
+// }
+// 
 static void emit_repeat_statement(PQ_Compiler* c)
 {
-	C_ERROR("`repeat` is not implemented at the moment");
+	// repeat
+	eat_token(c);
+
+	// <expr>
+	emit_expression(c);
+
+	PQ_Loop loop = {};
+
+	String name = str_format(c->arena, "__repeat_var_%d", c->instruction_count);
+
+	PQ_Variable* var = get_or_create_variable(c, name);
+
+	// {
+	try_eat_token(c, TOKEN_OPEN_BRACE);
+
+	// repeat_local = <expr>
+	push_inst(c, (PQ_Instruction){ var->global ? INST_STORE_GLOBAL : INST_STORE_LOCAL, var->idx });
+	
+	begin_scope(c, &loop.scope);
+
+	// repeat_local >= 0
+	push_inst(c, (PQ_Instruction){ var->global ? INST_LOAD_GLOBAL : INST_LOAD_LOCAL, var->idx });
+	push_inst(c, (PQ_Instruction){ INST_LOAD_IMMEDIATE, get_or_create_immediate(c, pq_value_number(0.0f)) });
+	push_inst(c, (PQ_Instruction){ INST_LESS_THAN });
+
+	// true? skip the loop
+	PQ_Instruction* jump_cond = push_inst(c, (PQ_Instruction){ INST_JUMP_COND });
+
+	// repeat_local = repeat_local - 1
+	push_inst(c, (PQ_Instruction){ var->global ? INST_LOAD_GLOBAL : INST_LOAD_LOCAL, var->idx });
+	push_inst(c, (PQ_Instruction){ INST_LOAD_IMMEDIATE, get_or_create_immediate(c, pq_value_number(1.0f)) });
+	push_inst(c, (PQ_Instruction){ INST_SUB });
+	push_inst(c, (PQ_Instruction){ var->global ? INST_STORE_GLOBAL : INST_STORE_LOCAL, var->idx });
+
+	c->current_loop = &loop;
+
+	while (peek_token(c, 0).type != TOKEN_CLOSE_BRACE)
+	{
+		emit_statement(c);
+	}
+
+	c->current_loop = nullptr;
+
+	// }
+	try_eat_token(c, TOKEN_CLOSE_BRACE);
+
+	push_inst(c, (PQ_Instruction){ INST_JUMP, loop.scope.first_inst });
+	
+	end_scope(c, &loop.scope);
+
+	jump_cond->arg = loop.scope.last_inst;
+
+	// patch breaks
+	patch_breaks(c, &loop);
 }
 
 // repeat until <expr> { ... }
 static void emit_repeat_until_statement(PQ_Compiler* c) 
 {
-	C_ERROR("`repeat until` is not implemented at the moment");
+	// repeat
+	eat_token(c);
+
+	// until
+	eat_token(c);
+
+	PQ_Loop loop = {};
+
+	begin_scope(c, &loop.scope);
+
+	// <expr>
+	emit_expression(c);
+
+	// {
+	try_eat_token(c, TOKEN_OPEN_BRACE);
+
+	// true? skip the loop
+	PQ_Instruction* jump_cond = push_inst(c, (PQ_Instruction){ INST_JUMP_COND });
+
+	c->current_loop = &loop;
+
+	while (peek_token(c, 0).type != TOKEN_CLOSE_BRACE)
+	{
+		emit_statement(c);
+	}
+
+	c->current_loop = nullptr;
+
+	try_eat_token(c, TOKEN_CLOSE_BRACE);
+
+	end_scope(c, &loop.scope);
+
+	push_inst(c, (PQ_Instruction){ INST_JUMP, loop.scope.first_inst });
+
+	jump_cond->arg = loop.scope.last_inst + 1; // last statement + the jump
+
+	// patch breaks
+	patch_breaks(c, &loop);
 }
 
 // forever { ... }

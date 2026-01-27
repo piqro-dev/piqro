@@ -190,6 +190,7 @@ static void CALL(PQ_VM* vm, uint16_t idx)
 
 	cf->return_ip = vm->ip + 1;
 	cf->local_base = vm->local_count;
+
 	cf->scratch = scratch_make(vm->arena);
 
 	if (vm->local_count >= PQ_MAX_LOCALS)
@@ -203,7 +204,7 @@ static void CALL(PQ_VM* vm, uint16_t idx)
 	for (uint8_t i = 0; i < pi->arg_count; i++) 
 	{
 		VERIFY_STACK_UNDERFLOW();
-		
+
 		vm->locals[(vm->local_count - 1) - i] = vm->stack[--vm->stack_size];
 	}
 
