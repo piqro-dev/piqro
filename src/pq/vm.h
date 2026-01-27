@@ -12,8 +12,8 @@ struct PQ_CallFrame
 {
 	uint16_t return_ip;
 
-	uint8_t stack_base;
-	uint8_t local_base;
+	uint16_t stack_base;
+	uint16_t local_base;
 
 	Scratch scratch;
 };
@@ -25,8 +25,8 @@ struct PQ_ProcedureInfo
 {
 	bool foreign;
 
-	uint8_t local_count;
-	uint8_t arg_count;
+	uint16_t local_count;
+	uint16_t arg_count;
 
 	uint16_t first_inst;
 
@@ -43,25 +43,25 @@ struct PQ_VM
 	PQ_VMErrorFn error;
 
 	PQ_Value* immediates;
-	uint8_t immediate_count;
+	uint16_t immediate_count;
 
 	PQ_ProcedureInfo* proc_infos;
-	uint8_t proc_info_count;
+	uint16_t proc_info_count;
 
 	PQ_Instruction* instructions;
 	uint16_t instruction_count;
 
 	PQ_CallFrame* call_frames;
-	uint8_t call_frame_count;
+	uint16_t call_frame_count;
 
 	PQ_Value* stack;
-	uint8_t stack_size;
+	uint16_t stack_size;
 
 	PQ_Value* locals;
-	uint8_t local_count;
+	uint16_t local_count;
 
 	PQ_Value* globals;
-	uint8_t global_count;
+	uint16_t global_count;
 
 	bool halt;
 
@@ -73,7 +73,7 @@ void pq_vm_init(PQ_VM* vm, Arena* arena, const PQ_CompiledBlob* b, PQ_VMErrorFn 
 
 bool pq_execute(PQ_VM* vm);
 
-PQ_Value pq_vm_get_local(PQ_VM* vm, uint8_t index);
+PQ_Value pq_vm_get_local(PQ_VM* vm, uint16_t index);
 
 PQ_Value pq_vm_pop(PQ_VM* vm);
 

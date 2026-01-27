@@ -19,10 +19,10 @@ typedef struct PQ_Procedure PQ_Procedure;
 struct PQ_Procedure
 {
 	String name;
-	uint8_t idx;
+	uint16_t idx;
 
-	uint8_t local_count;
-	uint8_t arg_count;
+	uint16_t local_count;
+	uint16_t arg_count;
 
 	bool used;
 	bool foreign;
@@ -34,7 +34,7 @@ typedef struct PQ_Variable PQ_Variable;
 struct PQ_Variable
 {
 	String name;
-	uint8_t idx;
+	uint16_t idx;
 
 	bool global;
 
@@ -89,4 +89,4 @@ void pq_compiler_init(PQ_Compiler* c, Arena* arena, String source, PQ_CompilerEr
 
 PQ_CompiledBlob pq_compile(PQ_Compiler* c);
 
-void pq_compiler_declare_foreign_proc(PQ_Compiler* c, String name, uint8_t arg_count);
+void pq_compiler_declare_foreign_proc(PQ_Compiler* c, String name, uint16_t arg_count);

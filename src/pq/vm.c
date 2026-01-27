@@ -33,11 +33,11 @@ static void read_magic(PQ_VM* vm, const PQ_CompiledBlob* b)
 
 static void read_immediates(PQ_VM* vm, const PQ_CompiledBlob* b)
 {
-	read_from_blob(vm, b, &vm->immediate_count, sizeof(uint8_t));
+	read_from_blob(vm, b, &vm->immediate_count, sizeof(uint16_t));
 
 	vm->immediates = arena_push_array(vm->arena, PQ_Value, vm->immediate_count);
 
-	for (uint8_t i = 0; i < vm->immediate_count; i++)
+	for (uint16_t i = 0; i < vm->immediate_count; i++)
 	{
 		PQ_Value v = {};
 
@@ -72,17 +72,17 @@ static void read_immediates(PQ_VM* vm, const PQ_CompiledBlob* b)
 
 static void read_procedures(PQ_VM* vm, const PQ_CompiledBlob* b)
 {
-	read_from_blob(vm, b, &vm->proc_info_count, sizeof(uint8_t));
+	read_from_blob(vm, b, &vm->proc_info_count, sizeof(uint16_t));
 
 	vm->proc_infos = arena_push_array(vm->arena, PQ_ProcedureInfo, vm->proc_info_count);
 
-	for (uint8_t i = 0; i < vm->proc_info_count; i++)
+	for (uint16_t i = 0; i < vm->proc_info_count; i++)
 	{
 		PQ_ProcedureInfo pi = {};
 
 		read_from_blob(vm, b, &pi.foreign, sizeof(bool));
-		read_from_blob(vm, b, &pi.local_count, sizeof(uint8_t));
-		read_from_blob(vm, b, &pi.arg_count, sizeof(uint8_t));
+		read_from_blob(vm, b, &pi.local_count, sizeof(uint16_t));
+		read_from_blob(vm, b, &pi.arg_count, sizeof(uint16_t));
 		read_from_blob(vm, b, &pi.first_inst, sizeof(uint16_t));
 
 		if (pi.foreign)
@@ -160,7 +160,7 @@ static void read_blob(PQ_VM* vm, const PQ_CompiledBlob* b)
 		VM_ERROR("Stack underflow"); \
 	}
 
-static uint8_t get_local_idx(PQ_VM* vm, uint8_t idx)
+static uint16_t get_local_idx(PQ_VM* vm, uint16_t idx)
 {
 	if (vm->call_frame_count > 0)
 	{
@@ -201,7 +201,7 @@ static void CALL(PQ_VM* vm, uint16_t idx)
 	vm->local_count += pi->arg_count;
 
 	// for convenience, we pop the arguments off the stack in reversed order
-	for (uint8_t i = 0; i < pi->arg_count; i++) 
+	for (uint16_t i = 0; i < pi->arg_count; i++) 
 	{
 		VERIFY_STACK_UNDERFLOW();
 
@@ -213,7 +213,7 @@ static void CALL(PQ_VM* vm, uint16_t idx)
 	if (!pi->foreign)
 	{
 		// push locals found in procedure
-		for (uint8_t i = 0; i < pi->local_count; i++) 
+		for (uint16_t i = 0; i < pi->local_count; i++) 
 		{
 			if (vm->local_count >= PQ_MAX_LOCALS)
 			{
@@ -749,7 +749,7 @@ bool pq_execute(PQ_VM* vm)
 	return !vm->halt;
 }
 
-PQ_Value pq_vm_get_local(PQ_VM* vm, uint8_t idx)
+PQ_Value pq_vm_get_local(PQ_VM* vm, uint16_t idx)
 {
 	return vm->locals[get_local_idx(vm, idx)];
 }
@@ -766,7 +766,7 @@ void pq_vm_push(PQ_VM* vm, PQ_Value v)
 
 void pq_vm_bind_foreign_proc(PQ_VM* vm, String name, PQ_NativeProcedure proc)
 {
-	for (uint8_t i = 0; i < vm->proc_info_count; i++)
+	for (uint16_t i = 0; i < vm->proc_info_count; i++)
 	{
 		PQ_ProcedureInfo* pi = &vm->proc_infos[i];
 

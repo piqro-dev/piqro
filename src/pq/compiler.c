@@ -738,7 +738,7 @@ static void emit_procedure_expression(PQ_Compiler* c)
 	// (
 	eat_token(c);
 
-	uint8_t arg_count = 0; 
+	uint16_t arg_count = 0; 
 
 	// <expr>, <expr>...
 	while (peek_token(c, 0).type != TOKEN_CLOSE_PAREN)
@@ -1940,7 +1940,7 @@ static void write_magic(PQ_Compiler* c, PQ_CompiledBlob* b)
 
 static void write_immediates(PQ_Compiler* c, PQ_CompiledBlob* b)
 {
-	write_to_blob(&c->immediate_count, b, sizeof(uint8_t));
+	write_to_blob(&c->immediate_count, b, sizeof(uint16_t));
 
 	for (uint16_t i = 0; i < c->immediate_count; i++)
 	{
@@ -1974,7 +1974,7 @@ static void write_immediates(PQ_Compiler* c, PQ_CompiledBlob* b)
 
 static void write_procedures(PQ_Compiler* c, PQ_CompiledBlob* b)
 {
-	write_to_blob(&c->procedure_count, b, sizeof(uint8_t));
+	write_to_blob(&c->procedure_count, b, sizeof(uint16_t));
 
 	for (uint16_t i = 0; i < c->procedure_count; i++)
 	{
@@ -1986,8 +1986,8 @@ static void write_procedures(PQ_Compiler* c, PQ_CompiledBlob* b)
 		//}
 
 		write_to_blob(&p.foreign, b, sizeof(bool));
-		write_to_blob(&p.local_count, b, sizeof(uint8_t));
-		write_to_blob(&p.arg_count, b, sizeof(uint8_t));
+		write_to_blob(&p.local_count, b, sizeof(uint16_t));
+		write_to_blob(&p.arg_count, b, sizeof(uint16_t));
 		write_to_blob(&p.scope.first_inst, b, sizeof(uint16_t));
 	
 		if (p.foreign)
@@ -2050,7 +2050,7 @@ PQ_CompiledBlob pq_compile(PQ_Compiler* c)
 	return b;
 }
 
-void pq_compiler_declare_foreign_proc(PQ_Compiler* c, String name, uint8_t arg_count)
+void pq_compiler_declare_foreign_proc(PQ_Compiler* c, String name, uint16_t arg_count)
 {
 	if (procedure_exists(c, name))
 	{
