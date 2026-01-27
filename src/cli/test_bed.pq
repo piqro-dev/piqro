@@ -5,13 +5,13 @@ var y = 0;
 var w = 10;
 var h = 10;
 
-var i = x; 
+var i = 0; 
 
-repeat until i >= w
+repeat w
 {
-  var j = y;
+  var j = 0;
 
-  repeat until j >= h
+  repeat h
   {
     put(i, j);
 

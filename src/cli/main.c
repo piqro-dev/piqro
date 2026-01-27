@@ -181,20 +181,9 @@ void dump_global_count(PQ_Compiler* c)
 void dump_state(PQ_VM* vm)
 {	
 	printf("\nVM info:\n");
-	printf("local count: %d\n", vm->local_count);
-	printf("stack size:  %d\n", vm->stack_size);
-	
-	printf("\nVM locals:\n");
-
-	Scratch scratch = scratch_make(vm->arena);
-	
-	for (uint16_t i = 0; i < vm->local_count; i++)
-	{
-		String v = pq_value_as_string(scratch.arena, vm->locals[i]);
-		printf("   [%d] %.*s, %s\n", i, s_fmt(v), pq_value_to_c_str(vm->locals[i].type));
-	}
-
-	scratch_release(scratch);
+	printf("local count:      %d\n", vm->local_count);
+	printf("stack size:       %d\n", vm->stack_size);
+	printf("call frame count: %d\n", vm->call_frame_count);
 
 	printf("\nVM memory consumption: %d bytes\n", vm->arena->offset);
 }
@@ -242,9 +231,9 @@ int main()
 	
 		while (pq_execute(&vm)) 
 		{
-			dump_instruction(&c, &vm);
-			dump_state(&vm);
-			dump_stack(&vm);
+			//dump_instruction(&c, &vm);
+			//dump_state(&vm);
+			//dump_stack(&vm);
 		}
 	}
 }

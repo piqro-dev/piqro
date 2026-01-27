@@ -303,6 +303,11 @@ static void LOAD_LOCAL(PQ_VM* vm, uint16_t idx)
 
 static void STORE_LOCAL(PQ_VM* vm, uint16_t idx)
 {
+	if (vm->call_frame_count == 0 && vm->local_count <= idx)
+	{
+		vm->local_count = idx + 1;
+	}
+
 	idx = get_local_idx(vm, idx);
 
 	if (idx >= PQ_MAX_LOCALS)

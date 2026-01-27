@@ -1097,10 +1097,7 @@ static void end_scope(PQ_Compiler* c, PQ_Scope* scope)
 
 	c->current_scope = scope->previous;
 
-	if (!c->current_scope)
-	{
-		c->local_count = scope->local_base;
-	}
+	c->local_count = scope->local_base;
 }
 
 static void emit_scope(PQ_Compiler* c)
