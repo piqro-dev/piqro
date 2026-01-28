@@ -76,6 +76,7 @@ struct PQ_Compiler
 
 	PQ_Variable* locals;
 	uint16_t local_count;
+	uint16_t all_local_count;
 
 	PQ_Scope* current_scope;
 	PQ_Procedure* current_proc;

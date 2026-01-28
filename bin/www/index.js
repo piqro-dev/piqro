@@ -10,6 +10,8 @@ let memory = null;
 let shouldStopPtr = null;
 let canvasBuffer = null;
 
+console.log('Guten morgen');
+
 const ctx = document.getElementById('main-canvas').getContext('2d');
 
 ctx.fillStyle = 'black';

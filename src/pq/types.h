@@ -356,7 +356,7 @@ static inline const char* pq_token_to_c_str(const PQ_TokenType type)
 		DEFINE_TOKENS
 	}
 	
-	return "unknown";
+	return "gibberish";
 }
 
 #undef TOKEN

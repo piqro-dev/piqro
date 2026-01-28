@@ -56,7 +56,6 @@ const env = {
 	//
 
 	js_alert(text)                    { alert(decode(text)); },
-
 	js_post_message(e)                { postMessage(e); },
 
 	js_console_log(text)              { console.log(decode(text)); },

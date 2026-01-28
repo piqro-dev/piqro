@@ -33,6 +33,13 @@ void sin_proc(PQ_VM* vm)
 	pq_vm_return_value(vm, pq_value_number(__builtin_sinf(v)));
 }
 
+void cos_proc(PQ_VM* vm)
+{
+	float v = pq_value_as_number(pq_vm_get_local(vm, 0));
+
+	pq_vm_return_value(vm, pq_value_number(__builtin_cosf(v)));
+}
+
 void test_proc(PQ_VM* vm)
 {
 	Scratch scratch = scratch_make(vm->arena);
@@ -181,8 +188,8 @@ void dump_global_count(PQ_Compiler* c)
 void dump_state(PQ_VM* vm)
 {	
 	printf("\nVM info:\n");
-	printf("local count:      %d\n", vm->local_count);
-	printf("stack size:       %d\n", vm->stack_size);
+	printf("local count: %d\n", vm->local_count);
+	printf("stack size:  %d\n", vm->stack_size);
 	printf("call frame count: %d\n", vm->call_frame_count);
 
 	printf("\nVM memory consumption: %d bytes\n", vm->arena->offset);
@@ -197,7 +204,7 @@ static constexpr const char source[] =
 
 int main()
 {
-	// NOTE: this amount of memory is  sufficient to compile any program that's smaller than PQ_MAX_BLOB_SIZE.
+	// NOTE: this amount of memory is sufficient to compile any program that's smaller than PQ_MAX_BLOB_SIZE.
 	static uint8_t compiler_mem[4 * 1024 * 1024];
 	
 	Arena compiler_arena = arena_make(compiler_mem, sizeof(compiler_mem));
@@ -209,6 +216,7 @@ int main()
 	
 		pq_compiler_declare_foreign_proc(&c, s("print"), 1);
 		pq_compiler_declare_foreign_proc(&c, s("sin"), 1);
+		pq_compiler_declare_foreign_proc(&c, s("cos"), 1);
 		pq_compiler_declare_foreign_proc(&c, s("test"), 2);
 	}
 
@@ -227,14 +235,16 @@ int main()
 	
 		pq_vm_bind_foreign_proc(&vm, s("print"), print_proc);
 		pq_vm_bind_foreign_proc(&vm, s("sin"), sin_proc);
+		pq_vm_bind_foreign_proc(&vm, s("cos"), cos_proc);
 		pq_vm_bind_foreign_proc(&vm, s("test"), test_proc);
 	
-		while (pq_execute(&vm)) 
+		do
 		{
-			//dump_instruction(&c, &vm);
-			//dump_state(&vm);
+			//printf("\n================================\n");
 			//dump_stack(&vm);
-		}
+			//dump_state(&vm);
+			//dump_instruction(&c, &vm);
+		} while (pq_execute(&vm));
 	}
 }
 

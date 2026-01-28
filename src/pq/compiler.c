@@ -632,6 +632,11 @@ static PQ_Variable* get_or_create_variable(PQ_Compiler* c, String name)
 		var->name = name;
 		var->idx = c->local_count - 1;
 		var->global = false;
+
+		if (!c->current_proc)
+		{
+			c->all_local_count++;
+		}
 		
 		return var;
 	}
@@ -1144,6 +1149,11 @@ static void emit_var_statement(PQ_Compiler* c)
 
 	PQ_Variable* var = get_or_create_variable(c, name);
 
+	if (c->current_proc)
+	{
+		c->current_proc->local_count++;
+	}
+
 	// [
 	if (peek_token(c, 0).type == TOKEN_OPEN_BOX)
 	{
@@ -1436,6 +1446,11 @@ static void emit_repeat_statement(PQ_Compiler* c)
 	String name = str_format(c->arena, "__repeat_var_%d", c->instruction_count);
 
 	PQ_Variable* var = get_or_create_variable(c, name);
+
+	if (c->current_proc)
+	{
+		c->current_proc->local_count++;
+	}
 
 	// {
 	try_eat_token(c, TOKEN_OPEN_BRACE);
@@ -2009,6 +2024,11 @@ static void write_global_count(PQ_Compiler* c, PQ_CompiledBlob* b)
 	write_to_blob(&c->global_count, b, sizeof(uint16_t));
 }
 
+static void write_local_count(PQ_Compiler* c, PQ_CompiledBlob* b)
+{
+	write_to_blob(&c->all_local_count, b, sizeof(uint16_t));
+}
+
 static void write_instructions(PQ_Compiler* c, PQ_CompiledBlob* b)
 {
 	write_to_blob(&c->instruction_count, b, sizeof(uint16_t));
@@ -2032,6 +2052,7 @@ static void write_blob(PQ_Compiler* c, PQ_CompiledBlob* b)
 	write_immediates(c, b);
 	write_procedures(c, b);
 	write_global_count(c, b);
+	write_local_count(c, b);
 	write_instructions(c, b);
 }
 

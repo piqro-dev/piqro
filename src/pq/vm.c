@@ -114,6 +114,16 @@ static void read_global_count(PQ_VM* vm, const PQ_CompiledBlob* b)
 	}
 }
 
+static void read_local_count(PQ_VM* vm, const PQ_CompiledBlob* b)
+{
+	read_from_blob(vm, b, &vm->local_count, sizeof(uint16_t));
+
+	for (uint16_t i = 0; i < vm->local_count; i++)
+	{
+		vm->locals[i] = pq_value_null();
+	}
+}
+
 static void read_instructions(PQ_VM* vm, const PQ_CompiledBlob* b)
 {
 	read_from_blob(vm, b, &vm->instruction_count, sizeof(uint16_t));
@@ -141,6 +151,7 @@ static void read_blob(PQ_VM* vm, const PQ_CompiledBlob* b)
 	read_immediates(vm, b);
 	read_procedures(vm, b);
 	read_global_count(vm, b);
+	read_local_count(vm, b);
 	read_instructions(vm, b);
 }
 
@@ -303,11 +314,6 @@ static void LOAD_LOCAL(PQ_VM* vm, uint16_t idx)
 
 static void STORE_LOCAL(PQ_VM* vm, uint16_t idx)
 {
-	if (vm->call_frame_count == 0 && vm->local_count <= idx)
-	{
-		vm->local_count = idx + 1;
-	}
-
 	idx = get_local_idx(vm, idx);
 
 	if (idx >= PQ_MAX_LOCALS)

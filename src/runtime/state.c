@@ -109,6 +109,14 @@ static RT_State* state;
 	PROC(log10, 1, \
 	{ \
 		pq_vm_return_value(vm, pq_value_number(__builtin_log10f(pq_value_as_number(pq_vm_get_local(vm, 0))))); \
+	}) \
+	PROC(rad, 1, \
+	{ \
+		pq_vm_return_value(vm, pq_value_number(pq_value_as_number(pq_vm_get_local(vm, 0)) * 0.0174533f)); \
+	}) \
+	PROC(deg, 1, \
+	{ \
+		pq_vm_return_value(vm, pq_value_number(pq_value_as_number(pq_vm_get_local(vm, 0)) * 57.2958f)); \
 	})
 
 #define PROC(name, arg_count, ...) \
