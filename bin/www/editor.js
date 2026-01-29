@@ -18,7 +18,7 @@ let editor = null;
 function showExportResult(canvas) {
 	const background = document.createElement('div');
 
-	background.style.backgroundColor = 'rgba(0, 0, 0, 0.25)';
+	background.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
 
 	background.style.position = 'fixed';
 	background.style.top = 0;
@@ -51,6 +51,9 @@ function showExportResult(canvas) {
 
 	closeButton.innerText = 'close';
 
+	closeButton.style.width = '50px';
+	closeButton.style.height = '30px';
+
 	closeButton.onclick = function() {
 		background.innerHTML = '';
 		background.remove();
@@ -70,7 +73,7 @@ function makeQRCode(msg) {
 
 	const qrCanvas = document.createElement('canvas');
 
-	const scale = 4;
+	const scale = matchMedia('(max-width: 600px)').matches ? 2 : 4;
 
 	const width = qr.size + 20;
 	const height = qr.size + 20;
@@ -95,7 +98,25 @@ function makeQRCode(msg) {
 	showExportResult(qrCanvas);
 }
 
+function clearCanvas() {
+	const s = matchMedia('(max-width: 600px)').matches ? 1 : 2;
+
+	mainCanvas.width = CANVAS_WIDTH * s;
+	mainCanvas.height = CANVAS_HEIGHT * s;
+
+	canvasSection.style.height = mainCanvas.height + 'px';
+
+	ctx.scale(s, s);
+
+	ctx.fillStyle = 'black';
+	ctx.imageSmoothingEnabled = false;
+
+	ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+}
+
 async function renderCanvas() {
+	clearCanvas();
+
 	if (state) {
 		let rgba = new Uint8ClampedArray(CANVAS_WIDTH * CANVAS_HEIGHT * 4);
 
@@ -251,20 +272,11 @@ function initEditors() {
 	outputArea.remove();
 }
 
-function initCanvas() {
-	ctx.scale(2, 2);
-
-	ctx.fillStyle = 'black';
-	ctx.imageSmoothingEnabled = false;
-
-	ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-}
-
 async function run() {
 	module = await WebAssembly.compileStreaming(fetch('piqro.wasm'));
 	
 	initEditors();
-	initCanvas();
+	clearCanvas();
 
 	worker = makeWorker();
 
