@@ -1,0 +1,72 @@
+* {
+	box-sizing: border-box;
+}
+
+body {
+	background-color: lightgray;
+
+	padding: 0;
+	margin: 0;
+
+	font-family: sans-serif;
+
+	overflow-x: hidden;
+}
+
+#toolStrip {
+	background-color: gray;
+	
+	width: 100%;
+	height: 40px;
+
+	padding: 10px;
+}
+
+#editorSection {
+	width: calc(100% - 490px);
+	height: 640px;
+
+	float: left;
+
+	padding: 10px;
+}
+
+#canvasSection {
+	width: 480px;
+	height: 640px;
+
+	float: left;
+
+	padding: 10px;
+	padding-left: 0px;
+}
+
+#outputSection {
+	width: calc(100% - 490px);
+	height: 220px;
+
+	float: left;
+
+	padding: 10px;
+}
+
+#infoSection {
+	width: 480px;
+	height: 220px;
+
+	float: left;
+
+	padding: 10px;
+
+	padding-left: 0px;
+	padding-right: 0px;
+
+	display: block;
+}
+
+#infoSection button {
+	float: left;
+
+	width: 33.333333%;
+	height: 50px;
+}

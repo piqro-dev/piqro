@@ -29,3 +29,7 @@ void rt_canvas_line(RT_Canvas* c, int16_t x0, int16_t y0, int16_t x1, int16_t y1
 void rt_canvas_rect(RT_Canvas* c, int16_t x, int16_t y, int16_t w, int16_t h);
 
 void rt_canvas_put(RT_Canvas* c, int16_t x, int16_t y);
+
+// we are doing one byte per pixel, 3 bits for R, 3 bits for G, 2 for B.
+// R3G3B2
+uint8_t rt_canvas_pack_color(uint8_t r, uint8_t g, uint8_t b);

@@ -10,6 +10,14 @@ struct RT_State
 {
 	Arena* arena;
 	RT_Canvas canvas;
+
+	bool left_key;
+	bool right_key;
+	bool up_key;
+	bool down_key;
+	
+	bool a_key;
+	bool b_key;
 };
 
 void rt_state_init(Arena* arena, RT_State* s);

@@ -14,6 +14,26 @@ static RT_State* state;
 		pq_vm_return(vm); \
 	}) \
 	\
+	PROC(color, 3, \
+	{ \
+		const uint8_t r = (uint8_t)pq_value_as_number(pq_vm_get_local(vm, 0)); \
+		const uint8_t g = (uint8_t)pq_value_as_number(pq_vm_get_local(vm, 1)); \
+		const uint8_t b = (uint8_t)pq_value_as_number(pq_vm_get_local(vm, 2)); \
+		\
+		pq_vm_return_value(vm, pq_value_number(rt_canvas_pack_color(r, g, b))); \
+	}) \
+	PROC(back, 1, \
+	{ \
+		state->canvas.back_color = (uint8_t)pq_value_as_number(pq_vm_get_local(vm, 0)); \
+		\
+		pq_vm_return(vm); \
+	}) \
+	PROC(fore, 1, \
+	{ \
+		state->canvas.fore_color = (uint8_t)pq_value_as_number(pq_vm_get_local(vm, 0)); \
+		\
+		pq_vm_return(vm); \
+	}) \
 	PROC(clear, 0, \
 	{ \
 		rt_canvas_clear(&state->canvas); \
@@ -28,10 +48,10 @@ static RT_State* state;
 	}) \
 	PROC(line, 4, \
 	{ \
-		int16_t x0 = pq_value_as_number(pq_vm_get_local(vm, 0)); \
-		int16_t y0 = pq_value_as_number(pq_vm_get_local(vm, 1)); \
-		int16_t x1 = pq_value_as_number(pq_vm_get_local(vm, 2)); \
-		int16_t y1 = pq_value_as_number(pq_vm_get_local(vm, 3)); \
+		const int16_t x0 = pq_value_as_number(pq_vm_get_local(vm, 0)); \
+		const int16_t y0 = pq_value_as_number(pq_vm_get_local(vm, 1)); \
+		const int16_t x1 = pq_value_as_number(pq_vm_get_local(vm, 2)); \
+		const int16_t y1 = pq_value_as_number(pq_vm_get_local(vm, 3)); \
 		\
 		rt_canvas_line(&state->canvas, x0, y0, x1, y1); \
 		\
@@ -39,10 +59,10 @@ static RT_State* state;
 	}) \
 	PROC(rect, 4, \
 	{ \
-		int16_t x = pq_value_as_number(pq_vm_get_local(vm, 0)); \
-		int16_t y = pq_value_as_number(pq_vm_get_local(vm, 1)); \
-		int16_t w = pq_value_as_number(pq_vm_get_local(vm, 2)); \
-		int16_t h = pq_value_as_number(pq_vm_get_local(vm, 3)); \
+		const int16_t x = pq_value_as_number(pq_vm_get_local(vm, 0)); \
+		const int16_t y = pq_value_as_number(pq_vm_get_local(vm, 1)); \
+		const int16_t w = pq_value_as_number(pq_vm_get_local(vm, 2)); \
+		const int16_t h = pq_value_as_number(pq_vm_get_local(vm, 3)); \
 		\
 		rt_canvas_rect(&state->canvas, x, y, w, h); \
 		\
@@ -117,6 +137,31 @@ static RT_State* state;
 	PROC(deg, 1, \
 	{ \
 		pq_vm_return_value(vm, pq_value_number(pq_value_as_number(pq_vm_get_local(vm, 0)) * 57.2958f)); \
+	}) \
+	\
+	PROC(left_key, 0, \
+	{ \
+		pq_vm_return_value(vm, pq_value_boolean(state->left_key)); \
+	}) \
+	PROC(right_key, 0, \
+	{ \
+		pq_vm_return_value(vm, pq_value_boolean(state->right_key)); \
+	}) \
+	PROC(up_key, 0, \
+	{ \
+		pq_vm_return_value(vm, pq_value_boolean(state->up_key)); \
+	}) \
+	PROC(down_key, 0, \
+	{ \
+		pq_vm_return_value(vm, pq_value_boolean(state->down_key)); \
+	}) \
+	PROC(a_key, 0, \
+	{ \
+		pq_vm_return_value(vm, pq_value_boolean(state->a_key)); \
+	}) \
+	PROC(b_key, 0, \
+	{ \
+		pq_vm_return_value(vm, pq_value_boolean(state->b_key)); \
 	})
 
 #define PROC(name, arg_count, ...) \

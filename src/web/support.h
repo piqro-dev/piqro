@@ -31,6 +31,8 @@ extern int32_t js_get_int(__externref_t, const char*);
 extern void js_get_string(__externref_t, const char*, char*);
 extern __externref_t js_get(__externref_t, const char*);
 
+extern void js_memcpy(void*, __externref_t, int32_t);
+
 //
 // helpers
 //

@@ -86,3 +86,8 @@ void rt_canvas_put(RT_Canvas* c, int16_t x, int16_t y)
 		c->back_buffer[x + y * c->width] = c->fore_color;
 	}
 }
+
+uint8_t rt_canvas_pack_color(uint8_t r, uint8_t g, uint8_t b)
+{
+	return (r << 5) | (g << 3) | b;
+}

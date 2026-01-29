@@ -126,6 +126,24 @@ void dump_stack(PQ_VM* vm)
 	}
 }
 
+static void post_rt(const RT_State* rt)
+{
+	__externref_t msg = js_obj();
+
+	js_set_string(msg, "type", "state");
+	js_set_int(msg, "frameBuffer", (intptr_t)rt->canvas.frame_buffer);
+
+	js_set_int(msg, "leftKeyPtr", (intptr_t)&rt->left_key);
+	js_set_int(msg, "rightKeyPtr", (intptr_t)&rt->right_key);
+	js_set_int(msg, "upKeyPtr", (intptr_t)&rt->up_key);
+	js_set_int(msg, "downKeyPtr", (intptr_t)&rt->down_key);
+
+	js_set_int(msg, "aKeyPtr", (intptr_t)&rt->a_key);
+	js_set_int(msg, "bKeyPtr", (intptr_t)&rt->b_key);
+
+	js_post_message(msg);
+}
+
 //
 // web interface
 //
@@ -140,6 +158,8 @@ atomic_bool* should_stop_ptr()
 	return &should_stop;
 }
 
+static PQ_CompiledBlob blob;
+
 void init() 
 {
 	static uint8_t compiler_mem[4 * 1024 * 1024];
@@ -151,34 +171,22 @@ void init()
 	atomic_store(&should_stop, true);
 }
 
-void run(__externref_t e)
+void compile_and_export(__externref_t e)
 {
 	had_error = false;
 
 	arena_reset(&compiler_arena);
 	arena_reset(&rt_arena);
 
-	String source = {};
-
-	source.length = (size_t)js_get_int(e, "length");
-	
-	if (source.length == 0)
-	{
-		__externref_t msg = js_obj();
-
-		js_set_string(msg, "type", "error");
-		js_set_string(msg, "details", "Empty program");
-
-		js_post_message(msg);
-
-		return;
-	}
-
 	RT_State rt = {};
 
 	rt_state_init(&rt_arena, &rt);
 
+	String source = {};
+
+	source.length = (size_t)js_get_int(e, "length");
 	source.buffer = arena_push_array(&compiler_arena, char, source.length);
+	
 	js_get_string(e, "source", source.buffer);
 
 	PQ_Compiler c = {};
@@ -186,7 +194,7 @@ void run(__externref_t e)
 	pq_compiler_init(&c, &compiler_arena, source, compiler_error_fn);
 	rt_declare_procedures(&c);
 	
-	PQ_CompiledBlob b = pq_compile(&c);
+	blob = pq_compile(&c);
 
 	if (had_error)
 	{
@@ -196,17 +204,74 @@ void run(__externref_t e)
 	{
 		__externref_t msg = js_obj();
 
-		js_set_string(msg, "type", "canvas");
-		js_set_int(msg, "buffer", (intptr_t)rt.canvas.frame_buffer);
+		js_set_string(msg, "type", "output");
+		js_set_int(msg, "buffer", (intptr_t)blob.buffer);
+		js_set_int(msg, "size", blob.size);
 
 		js_post_message(msg);
 	}
+}
+
+void run_from_blob(__externref_t e)
+{
+	arena_reset(&rt_arena);
+
+	RT_State rt = {};
+
+	rt_state_init(&rt_arena, &rt);
+
+	post_rt(&rt);
+
+	blob = (PQ_CompiledBlob){};
+
+	blob.size = js_get_int(e, "length");
+	blob.buffer = arena_push_array(&rt_arena, uint8_t, blob.size);
+
+	js_memcpy(blob.buffer, js_get(e, "buffer"), blob.size);
 
 	PQ_VM vm = {};
 
-	printf("Blob size: %d", b.size);
+	pq_vm_init(&vm, &rt_arena, &blob, vm_error_fn);
+	rt_bind_procedures(&vm);
+
+	while (!atomic_load(&should_stop) && pq_execute(&vm)) {}
+}
+
+void compile_and_run(__externref_t e)
+{
+	had_error = false;
+
+	arena_reset(&compiler_arena);
+	arena_reset(&rt_arena);
+
+	RT_State rt = {};
+
+	rt_state_init(&rt_arena, &rt);
+
+	String source = {};
+
+	source.length = (size_t)js_get_int(e, "length");
+	source.buffer = arena_push_array(&compiler_arena, char, source.length);
 	
-	pq_vm_init(&vm, &rt_arena, &b, vm_error_fn);
+	js_get_string(e, "source", source.buffer);
+
+	PQ_Compiler c = {};
+
+	pq_compiler_init(&c, &compiler_arena, source, compiler_error_fn);
+	rt_declare_procedures(&c);
+	
+	blob = pq_compile(&c);
+
+	if (had_error)
+	{
+		return;
+	}
+
+	post_rt(&rt);
+
+	PQ_VM vm = {};
+
+	pq_vm_init(&vm, &rt_arena, &blob, vm_error_fn);
 	rt_bind_procedures(&vm);
 
 	while (!atomic_load(&should_stop) && pq_execute(&vm)) {}
