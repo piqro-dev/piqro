@@ -7,7 +7,11 @@ static RT_State* state;
 	{ \
 		Scratch scratch = scratch_make(vm->arena); \
 		\
-		printf("%.*s\n", s_fmt(pq_value_as_string(scratch.arena, pq_vm_get_local(vm, 0)))); \
+		char out[1024]; \
+		\
+		sprintf(out, "%.*s\n", s_fmt(pq_value_as_string(scratch.arena, pq_vm_get_local(vm, 0)))); \
+		\
+		rt_print(out); \
 		\
 		scratch_release(scratch); \
 		\
@@ -34,6 +38,12 @@ static RT_State* state;
 		\
 		pq_vm_return(vm); \
 	}) \
+	PROC(line_width, 1, \
+	{ \
+		state->canvas.line_width = (uint8_t)pq_value_as_number(pq_vm_get_local(vm, 0)); \
+		\
+		pq_vm_return(vm); \
+	}) \
 	PROC(clear, 0, \
 	{ \
 		rt_canvas_clear(&state->canvas); \
@@ -48,10 +58,10 @@ static RT_State* state;
 	}) \
 	PROC(line, 4, \
 	{ \
-		const int16_t x0 = pq_value_as_number(pq_vm_get_local(vm, 0)); \
-		const int16_t y0 = pq_value_as_number(pq_vm_get_local(vm, 1)); \
-		const int16_t x1 = pq_value_as_number(pq_vm_get_local(vm, 2)); \
-		const int16_t y1 = pq_value_as_number(pq_vm_get_local(vm, 3)); \
+		const int16_t x0 = (int16_t)pq_value_as_number(pq_vm_get_local(vm, 0)); \
+		const int16_t y0 = (int16_t)pq_value_as_number(pq_vm_get_local(vm, 1)); \
+		const int16_t x1 = (int16_t)pq_value_as_number(pq_vm_get_local(vm, 2)); \
+		const int16_t y1 = (int16_t)pq_value_as_number(pq_vm_get_local(vm, 3)); \
 		\
 		rt_canvas_line(&state->canvas, x0, y0, x1, y1); \
 		\
@@ -59,21 +69,67 @@ static RT_State* state;
 	}) \
 	PROC(rect, 4, \
 	{ \
-		const int16_t x = pq_value_as_number(pq_vm_get_local(vm, 0)); \
-		const int16_t y = pq_value_as_number(pq_vm_get_local(vm, 1)); \
-		const int16_t w = pq_value_as_number(pq_vm_get_local(vm, 2)); \
-		const int16_t h = pq_value_as_number(pq_vm_get_local(vm, 3)); \
+		const int16_t x = (int16_t)pq_value_as_number(pq_vm_get_local(vm, 0)); \
+		const int16_t y = (int16_t)pq_value_as_number(pq_vm_get_local(vm, 1)); \
+		const int16_t w = (int16_t)pq_value_as_number(pq_vm_get_local(vm, 2)); \
+		const int16_t h = (int16_t)pq_value_as_number(pq_vm_get_local(vm, 3)); \
 		\
 		rt_canvas_rect(&state->canvas, x, y, w, h); \
 		\
 		pq_vm_return(vm); \
 	}) \
+	PROC(fill_rect, 4, \
+	{ \
+		const int16_t x = (int16_t)pq_value_as_number(pq_vm_get_local(vm, 0)); \
+		const int16_t y = (int16_t)pq_value_as_number(pq_vm_get_local(vm, 1)); \
+		const int16_t w = (int16_t)pq_value_as_number(pq_vm_get_local(vm, 2)); \
+		const int16_t h = (int16_t)pq_value_as_number(pq_vm_get_local(vm, 3)); \
+		\
+		rt_canvas_fill_rect(&state->canvas, x, y, w, h); \
+		\
+		pq_vm_return(vm); \
+	}) \
 	PROC(put, 2, \
 	{ \
-		int16_t x = pq_value_as_number(pq_vm_get_local(vm, 0)); \
-		int16_t y = pq_value_as_number(pq_vm_get_local(vm, 1)); \
+		int16_t x = (int16_t)pq_value_as_number(pq_vm_get_local(vm, 0)); \
+		int16_t y = (int16_t)pq_value_as_number(pq_vm_get_local(vm, 1)); \
 		\
 		rt_canvas_put(&state->canvas, x, y); \
+		\
+		pq_vm_return(vm); \
+	}) \
+	PROC(circle, 3, \
+	{ \
+		int16_t cx = (int16_t)pq_value_as_number(pq_vm_get_local(vm, 0)); \
+		int16_t cy = (int16_t)pq_value_as_number(pq_vm_get_local(vm, 1)); \
+		int16_t r = (int16_t)pq_value_as_number(pq_vm_get_local(vm, 2)); \
+		\
+		rt_canvas_circle(&state->canvas, cx, cy, r); \
+		\
+		pq_vm_return(vm); \
+	}) \
+	PROC(fill_circle, 3, \
+	{ \
+		int16_t cx = (int16_t)pq_value_as_number(pq_vm_get_local(vm, 0)); \
+		int16_t cy = (int16_t)pq_value_as_number(pq_vm_get_local(vm, 1)); \
+		int16_t r = (int16_t)pq_value_as_number(pq_vm_get_local(vm, 2)); \
+		\
+		rt_canvas_fill_circle(&state->canvas, cx, cy, r); \
+		\
+		pq_vm_return(vm); \
+	}) \
+	PROC(text, 4, \
+	{ \
+		Scratch scratch = scratch_make(vm->arena); \
+		\
+		int16_t x = (int16_t)pq_value_as_number(pq_vm_get_local(vm, 0)); \
+		int16_t y = (int16_t)pq_value_as_number(pq_vm_get_local(vm, 1)); \
+		int16_t s = (int16_t)pq_value_as_number(pq_vm_get_local(vm, 2)); \
+		String text = pq_value_as_string(scratch.arena, pq_vm_get_local(vm, 3)); \
+		\
+		rt_canvas_text(&state->canvas, x, y, s, text); \
+		\
+		scratch_release(scratch); \
 		\
 		pq_vm_return(vm); \
 	}) \
@@ -137,6 +193,10 @@ static RT_State* state;
 	PROC(deg, 1, \
 	{ \
 		pq_vm_return_value(vm, pq_value_number(pq_value_as_number(pq_vm_get_local(vm, 0)) * 57.2958f)); \
+	}) \
+	PROC(PI, 1, \
+	{ \
+		pq_vm_return_value(vm, pq_value_number(3.14159265359f)); \
 	}) \
 	\
 	PROC(left_key, 0, \

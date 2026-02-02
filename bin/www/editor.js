@@ -3,6 +3,14 @@
 const CANVAS_WIDTH = 240;
 const CANVAS_HEIGHT = 320;
 
+const TOUCH_BUTTON_RADIUS = 25;
+
+let touchButtons = [];
+let touchMap = new Map();
+
+let editor = null;
+let output = null;
+
 let worker = null;
 let module = null;
 
@@ -13,10 +21,12 @@ let state = null;
 
 const ctx = mainCanvas.getContext('2d');
 
-let editor = null;
+function isScreenSmall() {
+	return matchMedia('(max-width: 600px)').matches;
+}
 
 function showExportResult(canvas) {
-	const background = document.createElement('div');
+	const background = document.body.appendChild(document.createElement('div'));
 
 	background.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
 
@@ -32,9 +42,11 @@ function showExportResult(canvas) {
 	background.style.alignItems = 'center';
 	background.style.alignContent = 'center';
 
+	background.style.zIndex = 999;
+
 	const box = background.appendChild(document.createElement('div'));
 
-	box.innerHTML += 'Export result:';
+	box.innerHTML += 'result:';
 
 	box.style.backgroundColor = 'lightgray';
 	box.style.padding = '30px';
@@ -47,19 +59,16 @@ function showExportResult(canvas) {
 	box.appendChild(document.createElement('br'));
 	box.appendChild(document.createElement('br'));
 
-	const closeButton = box.appendChild(document.createElement('button'));
+	const close = box.appendChild(document.createElement('button'));
 
-	closeButton.innerText = 'close';
+	close.innerText = 'close';
 
-	closeButton.style.width = '50px';
-	closeButton.style.height = '30px';
+	close.style.width = '50px';
+	close.style.height = '30px';
 
-	closeButton.onclick = function() {
-		background.innerHTML = '';
+	close.onclick = function() {
 		background.remove();
 	}
-
-	document.body.appendChild(background);
 }
 
 function makeQRCode(msg) {
@@ -98,30 +107,115 @@ function makeQRCode(msg) {
 	showExportResult(qrCanvas);
 }
 
-function clearCanvas() {
-	const s = matchMedia('(max-width: 600px)').matches ? 1 : 2;
-
-	mainCanvas.width = CANVAS_WIDTH * s;
-	mainCanvas.height = CANVAS_HEIGHT * s;
-
-	canvasSection.style.height = mainCanvas.height + 'px';
-
-	ctx.scale(s, s);
-
-	ctx.fillStyle = 'black';
+function handleScreen() {
 	ctx.imageSmoothingEnabled = false;
 
-	ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+	if (isScreenSmall()) {
+		infoSection.style.display = 'none';
+		outputSection.style.display = 'none';
+
+		if (memory && shouldStopPtr) {
+			if (Atomics.load(memory, shouldStopPtr, true)) {
+				canvasSection.style.display = 'none';
+				toolSmallStop.style.display = 'none';
+				smallInfoSection.style.display = 'block';
+				editorSection.style.display = 'block';
+			} else {
+				smallInfoSection.style.display = 'none';
+				editorSection.style.display = 'none';
+				toolSmallStop.style.display = 'block';
+			}
+		}
+
+		mainCanvas.width = window.innerWidth;
+		mainCanvas.height = window.innerHeight - toolStrip.clientHeight;
+	
+		ctx.scale(1, 1);
+
+		window.onresize = function() {
+			mainCanvas.width = window.innerWidth;
+			mainCanvas.height = window.innerHeight - toolStrip.clientHeight;
+		};
+
+		const canvasX = (mainCanvas.width / 2) - (CANVAS_WIDTH / 2);
+
+		if (state) {
+			touchButtons = [
+				{
+					key: state.upKeyPtr,
+					x: canvasX + TOUCH_BUTTON_RADIUS * 2, 
+					y: 50 + CANVAS_HEIGHT + 30 + TOUCH_BUTTON_RADIUS,
+				},
+				{
+					key: state.downKeyPtr,
+					x: canvasX + TOUCH_BUTTON_RADIUS * 2, 
+					y: 50 + CANVAS_HEIGHT + 30 + TOUCH_BUTTON_RADIUS * 5
+				},
+				{
+					key: state.leftKeyPtr,
+					x: canvasX, 
+					y: 50 + CANVAS_HEIGHT + 30 + TOUCH_BUTTON_RADIUS * 3,
+				},
+				{
+					key: state.rightKeyPtr,
+					x: canvasX + TOUCH_BUTTON_RADIUS * 4, 
+					y: 50 + CANVAS_HEIGHT + 30 + TOUCH_BUTTON_RADIUS * 3,
+				},
+				{
+					key: state.aKeyPtr,
+					x: canvasX + CANVAS_WIDTH - TOUCH_BUTTON_RADIUS * 2, 
+					y: 50 + CANVAS_HEIGHT + 30 + TOUCH_BUTTON_RADIUS * 2,
+				},
+				{
+					key: state.bKeyPtr,
+					x: canvasX + CANVAS_WIDTH, 
+					y: 50 + CANVAS_HEIGHT + 30 + TOUCH_BUTTON_RADIUS * 4,
+				},
+			];
+		}
+	} else {
+		smallInfoSection.style.display = 'none';
+		toolSmallStop.style.display = 'none';
+
+		editorSection.style.display = 'block';
+		outputSection.style.display = 'block';
+		infoSection.style.display = 'block';
+		canvasSection.style.display = 'block';
+
+		mainCanvas.width = CANVAS_WIDTH * 2;
+		mainCanvas.height = CANVAS_HEIGHT * 2;
+	
+		editor.setSize(null, 640);
+
+		ctx.scale(2, 2);
+
+		window.onresize = null;
+	}
+
+	canvasSection.style.width = mainCanvas.width + 'px';
+	canvasSection.style.height = mainCanvas.height + 'px';
 }
 
+function initCanvas() {
+	if (isScreenSmall()) {
+		canvasSection.style.display = 'none';
+	}
+
+	handleScreen();
+}
+
+let rgba = new Uint8ClampedArray(CANVAS_WIDTH * CANVAS_HEIGHT * 4);
+
 async function renderCanvas() {
-	clearCanvas();
+	handleScreen();
+
+	ctx.fillStyle = isScreenSmall() ? 'darkgray' : 'black';
+	ctx.fillRect(0, 0, mainCanvas.width, mainCanvas.height);
 
 	if (state) {
-		let rgba = new Uint8ClampedArray(CANVAS_WIDTH * CANVAS_HEIGHT * 4);
-
 		for (let i = 0; i < CANVAS_WIDTH * CANVAS_HEIGHT * 4; i += 4) {
 			const pixel = memory[state.frameBuffer + (i / 4)];
+			
 			rgba[i + 0] = (((pixel >> 5) & 0b111) * 255) / 7;
 			rgba[i + 1] = (((pixel >> 3) & 0b111) * 255) / 7;
 			rgba[i + 2] = ((pixel & 0b11) * 255) / 3;
@@ -129,12 +223,24 @@ async function renderCanvas() {
 		}
 
 		const img = await createImageBitmap(new ImageData(rgba, CANVAS_WIDTH, CANVAS_HEIGHT));
-		ctx.drawImage(img, 0, 0);
+		
+		if (isScreenSmall()) {
+
+			ctx.drawImage(img, mainCanvas.width / 2 - CANVAS_WIDTH / 2, 50);
+
+			for (const button of touchButtons) {
+				ctx.fillStyle = 'red';
+				ctx.beginPath();
+				ctx.arc(button.x, button.y, TOUCH_BUTTON_RADIUS, 0, 2 * Math.PI);
+				ctx.fill();
+			}
+		} else {
+
+			ctx.drawImage(img, 0, 0);
+		}
 	}
 
-	//setTimeout(function() {
-		requestAnimationFrame(renderCanvas);
-	//}, 1000.0 / 30.0);
+	requestAnimationFrame(renderCanvas);
 }
 
 function makeWorker() {
@@ -161,11 +267,17 @@ function makeWorker() {
 				downKeyPtr: msg.downKeyPtr,
 				aKeyPtr: msg.aKeyPtr,
 				bKeyPtr: msg.bKeyPtr,
+				timeSinceStartPtr: msg.timeSinceStartPtr
 			};
 		}
 	
 		if (msg.type == 'output') {
 			makeQRCode(msg);
+		}
+
+		if (msg.type == 'print') {
+			output.setValue(output.getValue() + msg.text);
+			output.setCursor(output.lastLine());
 		}
 	}
 
@@ -175,21 +287,85 @@ function makeWorker() {
 }
 
 function addListeners() {
-	runButton.onclick = async function() {
+	// small screen
+	toolSmallStop.onclick = async function() {
 		if (memory) {
 			Atomics.store(memory, shouldStopPtr, true);
 		}
-	
-		worker.postMessage({ type: 'compileAndRun', source: editor.getValue()});
+
+		toolSmallStop.style.display = 'none';
 	}
 
-	stopButton.onclick = async function() {	
+	smallRun.onclick = async function() {
+		output.setValue('');
+
+		canvasSection.style.display = 'block';
+
+		if (memory) {
+			Atomics.store(memory, shouldStopPtr, true);
+		}
+	
+		worker.postMessage({ type: 'compileAndRun', source: editor.getValue() });
+	}
+
+	smallExport.onclick = async function() {	
+		if (memory) {
+			Atomics.store(memory, shouldStopPtr, true);
+		}
+	
+		worker.postMessage({ type: 'compileAndExport', source: editor.getValue() });
+	}
+
+	smallUndo.onclick = async function() {
+		editor.undo();
+	}
+
+	smallRedo.onclick = async function() {
+		editor.redo();
+	}
+
+	smallClear.onclick = async function() {	
+		editor.setValue('');
+	}
+
+	smallCopy.onclick = async function() {	
+		navigator.clipboard.writeText(editor.getValue());
+	}
+
+	smallPaste.onclick = async function() {
+		try {
+			const toPaste = await navigator.clipboard.readText();
+			const editorText = editor.getValue();
+			const cursorIdx = editor.indexFromPos(editor.getCursor());
+
+			if (editor.somethingSelected()) {
+				editor.replaceSelection(toPaste);
+			} else {
+				editor.setValue(editorText.substring(0, cursorIdx) + toPaste + editorText.substring(cursorIdx));
+			}
+		} catch (e) {
+			alert('Clipboard permission has been denied. Enable it and try again');
+		}
+	}
+
+	// regular screen
+	regRun.onclick = async function() {
+		output.setValue('');
+
+		if (memory) {
+			Atomics.store(memory, shouldStopPtr, true);
+		}
+
+		worker.postMessage({ type: 'compileAndRun', source: editor.getValue() });
+	}
+
+	regStop.onclick = async function() {	
 		if (memory) {
 			Atomics.store(memory, shouldStopPtr, true);
 		}
 	}
 	
-	exportButton.onclick = async function() {	
+	regExport.onclick = async function() {	
 		if (memory) {
 			Atomics.store(memory, shouldStopPtr, true);
 		}
@@ -198,8 +374,6 @@ function addListeners() {
 	}
 
 	mainCanvas.onkeydown = function(e) {
-		console.log('hoi');
-
 		if (!memory) {
 			return;
 		}
@@ -223,7 +397,7 @@ function addListeners() {
 		if (e.key == 'b') {
 			memory[state.bKeyPtr] = 1;	
 		}
-	};
+	}
 
 	mainCanvas.onkeyup = function(e) {
 		if (!memory) {
@@ -234,7 +408,6 @@ function addListeners() {
 			memory[state.upKeyPtr] = 0;	
 		}
 		if (e.key == 'ArrowDown') {
-			console.log('n');
 			memory[state.downKeyPtr] = 0;	
 		}
 		if (e.key == 'ArrowLeft') {
@@ -250,7 +423,45 @@ function addListeners() {
 		if (e.key == 'b') {
 			memory[state.bKeyPtr] = 0;	
 		}
-	};
+	}
+
+	mainCanvas.ontouchstart = function(e) {
+		if (!memory || !isScreenSmall()) {
+			return;
+		}
+
+		e.preventDefault();
+
+		const rect = mainCanvas.getBoundingClientRect();
+
+		for (const button of touchButtons) {
+			for (const touch of e.changedTouches) {
+				const distance = Math.hypot(touch.clientX - rect.left - button.x, touch.clientY - rect.top - button.y);
+
+				if (distance <= TOUCH_BUTTON_RADIUS) {
+					touchMap.set(touch.identifier, button.key);
+					memory[touchMap.get(touch.identifier)] = 1;
+				}
+			}
+		};
+	}
+
+	mainCanvas.ontouchend = function(e) {
+		if (!memory || !isScreenSmall()) {
+			return;
+		}
+
+		e.preventDefault();
+
+		for (const button of touchButtons) {
+			for (const touch of e.changedTouches) { 
+				if (touchMap.get(touch.identifier) == button.key) {
+					memory[button.key] = 0;
+					touchMap.delete(touch.identifier);
+				}
+			}
+		};
+	}
 }
 
 function initEditors() {
@@ -258,26 +469,29 @@ function initEditors() {
 		lineNumbers: true,
 	});
 
+	if (localStorage.sourceCode && localStorage.sourceCode !== '') {
+		editor.setValue(localStorage.sourceCode);
+	}
+
+	setInterval(function() {
+		localStorage.sourceCode = editor.getValue();
+	}, 2.5);
+
 	editor.setSize(null, 640);
 
-	editorArea.remove();
-
-	const output = CodeMirror.fromTextArea(outputArea, {
+	output = CodeMirror.fromTextArea(outputArea, {
 		readOnly: 'nocursor',
 	});
 
 	output.setSize(null, 200);
-	output.setValue('hello world');
-	
-	outputArea.remove();
 }
 
 async function run() {
+	initEditors();
+	initCanvas();
+
 	module = await WebAssembly.compileStreaming(fetch('piqro.wasm'));
 	
-	initEditors();
-	clearCanvas();
-
 	worker = makeWorker();
 
 	addListeners();

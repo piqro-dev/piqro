@@ -18,6 +18,8 @@ struct RT_State
 	
 	bool a_key;
 	bool b_key;
+
+	float time_since_start;
 };
 
 void rt_state_init(Arena* arena, RT_State* s);
@@ -25,3 +27,5 @@ void rt_state_init(Arena* arena, RT_State* s);
 void rt_declare_procedures(PQ_Compiler* c);
 
 void rt_bind_procedures(PQ_VM* vm);
+
+extern void rt_print(const char*);

@@ -150,3 +150,28 @@ static inline bool is_alnum(int32_t ch)
 {
 	return is_alpha(ch) || is_number(ch);
 }
+
+static inline size_t get_utf8_byte_count(char c) 
+{
+	if (0 <= c && c < 0x80)
+	{
+		return 1;
+	}
+	
+	if (0xC2 <= c && c < 0xE0) 
+	{
+		return 2;
+	}
+	
+	if (0xE0 <= c && c < 0xF0) 
+	{
+		return 3;
+	}
+	
+	if (0xF0 <= c && c < 0xF8) 
+	{
+		return 4;
+	}
+
+	return 0;
+}

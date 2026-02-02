@@ -13,7 +13,22 @@
 </head>
 <body>
 	<div id="toolStrip">
-		<a href="index.html"><i>piqro</i></a>
+		<button id="toolSmallStop">stop</button>
+	</div>
+
+	<div id="smallInfoSection">
+		<div id="smallFirstSection">
+			<button id="smallRun">run</button>
+			<button id="smallExport">export</button>
+		</div>
+		
+		<div id="smallSecondSection">
+			<button id="smallUndo">undo</button>
+			<button id="smallRedo">redo</button>
+			<button id="smallClear">clear all</button>
+			<button id="smallCopy">copy to clipboard</button>
+			<button id="smallPaste">paste from clipboard</button>
+		</div>
 	</div>
 
 	<div id="editorSection">
@@ -21,7 +36,7 @@
 	</div>
 	
 	<div id="canvasSection">
-		<canvas tabindex="0" id="mainCanvas" width="480" height="640"></canvas>
+		<canvas tabindex="0" id="mainCanvas"></canvas>
 	</div>
 
 	<div id="outputSection">
@@ -31,9 +46,9 @@
 
 	<div id="infoSection">
 		<br>
-		<button id="runButton">run</button>
-		<button id="stopButton">stop</button>
-		<button id="exportButton">export</button>
+		<button id="regRun">run</button>
+		<button id="regStop">stop</button>
+		<button id="regExport">export</button>
 	</div>
 
 	<script src="editor.js"></script>

@@ -6,13 +6,19 @@
 	<title>piqro player</title>
 	
 	<script src="third_party/zbar/index.js"></script>
+
+	<link rel="stylesheet" type="text/css" href="player.css">
 </head>
 <body>
-	<div>
-		<canvas id="mainCanvas" width="480" height="640"></canvas>
+	<div id="toolStrip">
+		<a href="index.html"><i>piqro</i></a>
+	</div>
+
+	<div id="canvasSection">
+		<canvas tabindex="0" id="mainCanvas"></canvas>
 	</div>
 	
-	<div id="inputDiv">
+	<div id="inputSection">
 		<p>scan a program</p>
 	
 		<video id="inputStream"></video>

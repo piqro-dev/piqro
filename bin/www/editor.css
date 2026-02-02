@@ -14,12 +14,54 @@ body {
 }
 
 #toolStrip {
+	float: left;
+
 	background-color: gray;
 	
 	width: 100%;
 	height: 60px;
 
-	padding: 10px;
+	padding: 5px;
+}
+
+#toolStrip button {
+	float: left;
+
+	width: 20%;
+	height: 50px;
+
+	display: none;
+}
+
+#smallInfoSection {
+	padding: 5px;
+
+	display: none;
+}
+
+#smallInfoSection button {
+	float: left;
+
+	width: 50%;
+	height: 50px;
+}
+
+#smallFirstSection {
+	float: left;
+	width: 100%;
+}
+
+#smallSecondSection {
+	float: left;
+	width: 100%;
+}
+
+#smallFirstSection button {
+	width: 20%;
+}
+
+#smallSecondSection button {
+	width: 20%;
 }
 
 #editorSection {
@@ -67,10 +109,8 @@ body {
 #infoSection button {
 	float: left;
 
-	width: calc(33.33% - 10px);
+	width: 33.33%;
 	height: 50px;
-
-	margin: 5px;
 }
 
 #editorArea {
@@ -81,22 +121,17 @@ body {
 	display: none;
 }
 
+#mainCanvas {
+	image-rendering: pixelated;
+}
+
 @media screen and (max-width: 600px) {
-	#editorSection, #outputSection {
+	#editorSection {
 		width: 100%;
-
-		margin-top: 10px;
-
 		padding: 5px;
 	}
-	
-	#canvasSection, #infoSection {
-		width: 100%;
 
-		text-align: center;
-
-		margin-top: 10px;
-
-		padding: 5px;
+	#canvasSection {
+		padding: 0px;
 	}
 }

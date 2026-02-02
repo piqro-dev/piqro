@@ -141,6 +141,8 @@ static void post_rt(const RT_State* rt)
 	js_set_int(msg, "aKeyPtr", (intptr_t)&rt->a_key);
 	js_set_int(msg, "bKeyPtr", (intptr_t)&rt->b_key);
 
+	js_set_int(msg, "timeSinceStartPtr", (intptr_t)&rt->time_since_start);
+
 	js_post_message(msg);
 }
 
@@ -268,6 +270,8 @@ void compile_and_run(__externref_t e)
 	}
 
 	post_rt(&rt);
+
+	printf("blob size: %d", blob.size);
 
 	PQ_VM vm = {};
 
