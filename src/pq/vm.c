@@ -187,7 +187,7 @@ static void CALL(PQ_VM* vm, uint16_t idx)
 {
 	if (idx >= vm->proc_info_count)
 	{
-		VM_ERROR("Callee index out of bounds");
+		VM_ERROR("Callee index %d out of bounds.\nProcedure count: %d", idx, vm->proc_info_count);
 	}
 
 	const PQ_ProcedureInfo* pi = &vm->proc_infos[idx];
@@ -696,6 +696,8 @@ void pq_vm_init(PQ_VM* vm, Arena* arena, const PQ_CompiledBlob* b, PQ_VMErrorFn 
 	vm->call_frames = arena_push_array(arena, PQ_CallFrame, PQ_MAX_CALL_FRAMES);
 	vm->stack = arena_push_array(arena, PQ_Value, PQ_MAX_STACK_SIZE);
 	vm->locals = arena_push_array(arena, PQ_Value, PQ_MAX_LOCALS);
+
+	vm->bp = 0;
 
 	read_blob(vm, b);
 

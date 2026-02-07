@@ -4,6 +4,7 @@
 #include <base/arena.h>
 
 #include <pq/types.h>
+#include <pq/config.h>
 
 typedef struct PQ_VM PQ_VM;
 

@@ -61,6 +61,15 @@ if "%web%"=="true" (
 	goto exit
 )
 
+if "%hw%"=="true" (
+	pushd bin\cmake
+		cmake ..\..\src\hw -G Ninja
+		ninja && copy piqro.uf2 h:
+	popd
+	
+	goto exit
+)
+
 if "%1"=="" ( 
 	echo usage: [%0] [targets...] [release]
 	echo.

@@ -3,7 +3,11 @@
 #include <base/common.h>
 #include <base/arena.h>
 
+#include <runtime/canvas.h>
 #include <runtime/config.h>
+
+#include <pq/vm.h>
+#include <pq/compiler.h>
 
 typedef struct RT_State RT_State;
 struct RT_State
@@ -20,6 +24,7 @@ struct RT_State
 	bool b_key;
 
 	float time_since_start;
+	float delta_time;
 };
 
 void rt_state_init(Arena* arena, RT_State* s);

@@ -9,9 +9,11 @@ RT_Canvas rt_canvas_make(Arena* arena, uint16_t width, uint16_t height)
 	c.width = width;
 	c.height = height;
 
-	c.back_buffer = arena_push_array(arena, uint8_t, c.width * c.height);
-	c.frame_buffer = arena_push_array(arena, uint8_t, c.width * c.height);
-
+	#if !defined PICO_RP2040
+		c.back_buffer = arena_push_array(arena, uint8_t, c.width * c.height);
+		c.frame_buffer = arena_push_array(arena, uint8_t, c.width * c.height);
+	#endif
+	
 	c.back_color = 0x00;
 	c.fore_color = 0xff;
 
@@ -22,14 +24,35 @@ RT_Canvas rt_canvas_make(Arena* arena, uint16_t width, uint16_t height)
 	return c;
 }
 
+#if defined PICO_RP2040
+	static uint16_t r3g3b2_to_r5g6b5(uint8_t color)
+	{
+		uint8_t b2 = (color >> 6) & 0x03;
+		uint8_t g3 = (color >> 3) & 0x07;
+		uint8_t r3 = (color >> 0) & 0x07;
+
+		uint8_t r5 = (r3 << 2) | (r3 >> 1);
+		uint8_t g6 = (g3 << 3) | g3;
+		uint8_t b5 = (b2 << 3) | (b2 << 1) | (b2 >> 1);
+
+		return ((uint16_t)r5 << 11) | ((uint16_t)g6 << 5) | (uint16_t)b5;
+	}
+#endif
+
 void rt_canvas_clear(RT_Canvas* c)
 {
-	__builtin_memset(c->back_buffer, c->back_color, c->width * c->height);
+	#if defined PICO_RP2040
+		lcd_fill_screen(r3g3b2_to_r5g6b5(c->back_color));
+	#else
+		__builtin_memset(c->back_buffer, c->back_color, c->width * c->height);
+	#endif
 }
 
 void rt_canvas_present(RT_Canvas* c)
 {
-	__builtin_memcpy(c->frame_buffer, c->back_buffer, c->width * c->height);
+	#if !defined PICO_RP2040
+		__builtin_memcpy(c->frame_buffer, c->back_buffer, c->width * c->height);
+	#endif
 }
 
 void rt_canvas_line(RT_Canvas* c, int16_t x0, int16_t y0, int16_t x1, int16_t y1)
@@ -74,36 +97,57 @@ void rt_canvas_line(RT_Canvas* c, int16_t x0, int16_t y0, int16_t x1, int16_t y1
 
 void rt_canvas_rect(RT_Canvas* c, int16_t x, int16_t y, int16_t w, int16_t h)
 {
-	for (uint16_t i = 0; i < c->line_width; i++)
-	{
-		rt_canvas_fill_rect(c, x, y, w, 1);
-		rt_canvas_fill_rect(c, x, y + h, w, 1);
+	#if defined PICO_RP2040
+		const uint16_t cc = r3g3b2_to_r5g6b5(c->fore_color);
 
-		rt_canvas_fill_rect(c, x, y + 1, 1, h - 1);
-		rt_canvas_fill_rect(c, x + w - 1, y + 1, 1, h - 1);
-	
-		x--, y--;
-		w += 2, h += 2;
-	}
+		lcd_fill_rect(x, y, w, 1, cc);
+		lcd_fill_rect(x, y + h, w, 1, cc);
+		lcd_fill_rect(x, y + 1, 1, h - 1, cc);
+		lcd_fill_rect(x + w - 1, y + 1, 1, h - 1, cc);
+	#else
+		for (uint16_t i = 0; i < c->line_width; i++)
+		{
+			rt_canvas_fill_rect(c, x, y, w, 1);
+			rt_canvas_fill_rect(c, x, y + h, w, 1);
+
+			rt_canvas_fill_rect(c, x, y + 1, 1, h - 1);
+			rt_canvas_fill_rect(c, x + w - 1, y + 1, 1, h - 1);
+		
+			x--, y--;
+			w += 2, h += 2;
+		}
+	#endif
 }
 
 void rt_canvas_fill_rect(RT_Canvas* c, int16_t x, int16_t y, int16_t w, int16_t h)
 {
-	for (int16_t i = x; i < x + w; i++) 
-	{
-		for (int16_t j = y; j < y + h; j++) 
+	#if defined PICO_RP2040
+		const uint16_t cc = r3g3b2_to_r5g6b5(c->fore_color);
+
+		lcd_fill_rect(x, y, w, h, cc);
+	#else
+		for (int16_t i = x; i < x + w; i++) 
 		{
-			rt_canvas_put(c, i, j);
+			for (int16_t j = y; j < y + h; j++) 
+			{
+				rt_canvas_put(c, i, j);
+			}
 		}
-	}
+	#endif
 }
 
 void rt_canvas_put(RT_Canvas* c, int16_t x, int16_t y)
 {
-	if (x >= 0 && y >= 0 && x < c->width && y < c->height)
-	{
-		c->back_buffer[x + y * c->width] = c->fore_color;
-	}
+	#if defined PICO_RP2040
+		const uint16_t cc = r3g3b2_to_r5g6b5(c->fore_color);
+
+		lcd_draw_pixel(x, y, cc);
+	#else
+		if (x >= 0 && y >= 0 && x < c->width && y < c->height)
+		{
+			c->back_buffer[x + y * c->width] = c->fore_color;
+		}
+	#endif
 }
 
 void rt_canvas_circle(RT_Canvas* c, int16_t cx, int16_t cy, int16_t r)
