@@ -4,6 +4,8 @@
 ## Info
 piqro is a game console with its own programming language and virtual machine. It runs in the browser through WebAssembly, so games can be written, compiled, and played without installing an editor or runtime.
 
+**Note:** piqro is an unfinished work-in-progress project.
+
 The project also includes an experimental Raspberry Pi Pico hardware target. 
 - Note: the exact schematics are undocumented at this time.
 
